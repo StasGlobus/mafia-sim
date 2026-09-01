@@ -166,6 +166,16 @@ export const DEFAULT_SCHEDULE: LiveSchedule = {
 
 export const WEEKDAYS_HE = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
+export const WEEKDAY_CHIPS: { i: number; l: string }[] = [
+  { i: 0, l: "א" },
+  { i: 1, l: "ב" },
+  { i: 2, l: "ג" },
+  { i: 3, l: "ד" },
+  { i: 4, l: "ה" },
+  { i: 5, l: "ו" },
+  { i: 6, l: "ש" },
+];
+
 export interface DeathReveal {
   playerId: string;
   name: string;
@@ -242,6 +252,30 @@ export interface LiveView {
   seats: number;
   me: LiveMeView;
   now: string;
+}
+
+export interface AdminPlayerView {
+  id: string;
+  name: string;
+  realName: string | null;
+  kind: PlayerKind;
+  alive: boolean;
+  role: Role | null;
+  personality: Personality;
+}
+
+export interface AdminView extends Omit<LiveView, "players"> {
+  isAdmin: true;
+  players: AdminPlayerView[];
+  wolfMsgs: ChatMessage[];
+  seerMsgs: ChatMessage[];
+  doctorMsgs: ChatMessage[];
+  night: {
+    wolfTargetName: string | null;
+    seerTargetName: string | null;
+    doctorTargetName: string | null;
+  };
+  eventLog: string[];
 }
 
 export const ROLE_ART: Record<Role, string> = {

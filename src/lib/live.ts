@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { LiveGame, LiveSchedule, LiveView, Personality, Player, Role } from "./types";
+import type { AdminView, LiveGame, LiveSchedule, LiveView, Personality, Player, Role } from "./types";
 import { DEFAULT_CONFIG, DEFAULT_SCHEDULE, LIVE_SEATS, ROLE_HE } from "./types";
 import { pickNames, shuffle } from "./names";
 import { NAME_POOL } from "./names";
@@ -24,7 +24,7 @@ import {
   wolfPulse,
 } from "./agents";
 import { getLive, hasLive, setLive } from "./live-store";
-import { playerView, prettyJerusalem } from "./view";
+import { adminView, playerView, prettyJerusalem } from "./view";
 
 export { prettyJerusalem };
 
@@ -556,7 +556,7 @@ function emptyLive(code: string, host: Player, secret: string, schedule: LiveSch
 }
 
 export type ActionResult =
-  | { ok: true; game: LiveView; me?: { playerId: string; secret: string; fakeName: string } }
+  | { ok: true; game: LiveView | AdminView; me?: { playerId: string; secret: string; fakeName: string } }
   | { ok: false; error: string; status: number };
 
 function viewOf(game: LiveGame, me: Player, now: number, extra?: { playerId: string; secret: string; fakeName: string }): ActionResult {
@@ -648,7 +648,7 @@ export async function startLiveGame(input: { code: string; secret: string }): Pr
   if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
   const me = findPlayerBySecret(game, input.secret);
   if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
-  if (me.id !== game.hostId) return { ok: false, error: "רק המארח מתחיל", status: 403 };
+  if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
   if (game.phase !== "lobby") return { ok: false, error: "כבר התחיל", status: 400 };
   const humans = game.players.filter((p) => p.kind === "human");
   if (humans.length < 1) return { ok: false, error: "צריך לפחות אחד", status: 400 };
@@ -811,6 +811,42 @@ export async function liveNightPick(input: {
     return viewOf(game, me, now);
   }
   return { ok: false, error: "לא התור שלך", status: 400 };
+}
+
+export function setLiveSchedule(input: {
+  code: string;
+  secret: string;
+  dayStart?: string;
+  dayEnd?: string;
+  days?: number[];
+}): ActionResult {
+  const game = getLive(input.code.trim());
+  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
+  const me = findPlayerBySecret(game, input.secret);
+  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
+  if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+  if (game.phase !== "lobby" || game.status !== "idle") {
+    return { ok: false, error: "רק בלובי", status: 400 };
+  }
+  const schedule = parseSchedule(input);
+  if ("error" in schedule) return { ok: false, error: schedule.error, status: 400 };
+  game.schedule = schedule;
+  setLive(game);
+  return { ok: true, game: adminView(game, me, Date.now()) };
+}
+
+export async function liveAdminGet(input: { code: string; secret: string }): Promise<ActionResult> {
+  const game = getLive(input.code.trim());
+  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
+  const me = findPlayerBySecret(game, input.secret);
+  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
+  if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+  const now = Date.now();
+  if (game.status === "running") {
+    await catchUp(game, now);
+    setLive(game);
+  }
+  return { ok: true, game: adminView(game, me, now) };
 }
 
 export { todayDayStart, todayDayEnd };

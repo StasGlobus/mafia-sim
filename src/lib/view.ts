@@ -1,4 +1,4 @@
-import type { LiveGame, LiveView, Player, Role } from "./types";
+import type { AdminView, LiveGame, LiveView, Player, Role } from "./types";
 import { PHASE_HE, ROLE_HE, WEEKDAYS_HE } from "./types";
 
 function pad(n: number) {
@@ -169,5 +169,41 @@ export function playerView(game: LiveGame, me: Player, now = Date.now()): LiveVi
       myNightPick,
     },
     now: new Date(now).toISOString(),
+  };
+}
+
+export function adminView(game: LiveGame, me: Player, now = Date.now()): AdminView {
+  const lobby = game.phase === "lobby" || game.status === "idle";
+  const pv = playerView(game, me, now);
+  const { players: _playerRoster, ...rest } = pv;
+  void _playerRoster;
+
+  const nameOf = (id: string | null): string | null => {
+    if (!id) return null;
+    return game.players.find((p) => p.id === id)?.name ?? null;
+  };
+
+  return {
+    ...rest,
+    isAdmin: true,
+    messages: game.messages.filter((m) => m.channel === "public" || m.channel === "events"),
+    players: game.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      realName: p.kind === "human" ? p.realName ?? null : null,
+      kind: p.kind ?? "agent",
+      alive: p.alive,
+      role: lobby ? null : p.role,
+      personality: p.personality,
+    })),
+    wolfMsgs: game.messages.filter((m) => m.channel === "wolves"),
+    seerMsgs: game.messages.filter((m) => m.channel === "seer"),
+    doctorMsgs: game.messages.filter((m) => m.channel === "doctor"),
+    night: {
+      wolfTargetName: nameOf(game.night.wolfTarget),
+      seerTargetName: nameOf(game.night.seerTarget),
+      doctorTargetName: nameOf(game.night.doctorTarget),
+    },
+    eventLog: [...game.eventLog],
   };
 }

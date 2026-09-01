@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { LiveView } from "@/lib/types";
 import { ROLE_ART, ROLE_HE } from "@/lib/types";
@@ -9,7 +9,6 @@ type Tab = "chat" | "people" | "me";
 type StoredMe = { playerId: string; secret: string; fakeName: string };
 
 const AVATAR = ["#e8a87c", "#7dcea0", "#f7dc6f", "#85c1e9", "#d7bde2", "#76d7c4", "#f5b7b1", "#aed6f1"];
-const SHARE_HOST = "https://mafia-werewolf.vercel.app";
 
 function colorFor(id: string) {
   let n = 0;
@@ -51,7 +50,7 @@ function phaseHint(view: LiveView): string {
   if (view.waitText) return view.waitText;
   switch (view.phase) {
     case "lobby":
-      return "מחכים שיתחילו";
+      return "מחכים שהמנהל יתחיל";
     case "day":
       return "מדברים ומצביעים";
     case "night_wolves":
@@ -108,7 +107,6 @@ export default function LiveGame({ code }: { code: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [now, setNow] = useState(() => Date.now());
-  const [copied, setCopied] = useState(false);
   const publicEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -193,16 +191,6 @@ export default function LiveGame({ code }: { code: string }) {
     }
   }
 
-  async function start() {
-    if (!identity) return;
-    try {
-      const data = await liveApi({ action: "start", code, secret: identity.secret });
-      if (data.game) setView(data.game);
-    } catch (er) {
-      setErr(er instanceof Error ? er.message : "לא הלך");
-    }
-  }
-
   async function send() {
     if (!identity || !text.trim()) return;
     const t = text.trim();
@@ -233,21 +221,6 @@ export default function LiveGame({ code }: { code: string }) {
       if (data.game) setView(data.game);
     } catch (er) {
       setErr(er instanceof Error ? er.message : "לא הלך");
-    }
-  }
-
-  const shareUrl = useMemo(() => {
-    if (typeof window !== "undefined") return `${window.location.origin}/g/${code}`;
-    return `${SHARE_HOST}/g/${code}`;
-  }, [code]);
-
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setErr("לא הועתק");
     }
   }
 
@@ -290,15 +263,16 @@ export default function LiveGame({ code }: { code: string }) {
   if (view.status === "lobby") {
     return (
       <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col bg-night px-4 py-6 text-paper">
-        <div className="text-sm text-dust">לובי · {view.humansJoined}/{view.seats}</div>
-        <h1 className="mt-2 text-3xl font-extrabold">מחכים</h1>
-        <p className="mt-1 text-dust">הקוד {view.code}</p>
-        <div className="mt-4 rounded-2xl bg-white/5 p-4">
-          <div className="break-all text-sm">{shareUrl}</div>
-          <button onClick={() => void copyLink()} className="mt-3 min-h-12 w-full rounded-2xl bg-white/10 font-bold">
-            {copied ? "הועתק" : "העתק קישור"}
-          </button>
+        <div className="flex items-center justify-between text-sm text-dust">
+          <span>לובי · {view.humansJoined}/{view.seats}</span>
+          {view.me.isHost && (
+            <Link href={`/admin/${code}`} className="text-dust underline-offset-4 hover:underline">
+              ניהול
+            </Link>
+          )}
         </div>
+        <h1 className="mt-2 text-3xl font-extrabold">מחכים שהמנהל יתחיל</h1>
+        <p className="mt-1 text-dust">הקוד {view.code}</p>
         <ul className="mt-6 space-y-2">
           {view.players.map((p) => (
             <li key={p.id} className="flex min-h-12 items-center gap-3 rounded-2xl bg-white/5 px-3">
@@ -308,23 +282,16 @@ export default function LiveGame({ code }: { code: string }) {
                   אתה · {view.me.realName}
                 </span>
               )}
-              {p.isMe && view.me.isHost && <span className="mr-auto text-xs text-dust">מארח</span>}
             </li>
           ))}
         </ul>
         <p className="mt-4 text-sm text-dust">
-          ביום {view.schedule.dayStart}–{view.schedule.dayEnd}. בינתיים מחכים לכולם.
+          ביום {view.schedule.dayStart}–{view.schedule.dayEnd}. ימים: {view.schedule.days.map((d) => ["א", "ב", "ג", "ד", "ה", "ו", "ש"][d]).join(" ")}.
         </p>
         <div className="mt-auto space-y-3 pt-8">
-          {view.me.isHost ? (
-            <button onClick={() => void start()} className="min-h-14 w-full rounded-2xl bg-paper text-lg font-extrabold text-ink">
-              מלא בבוטים והתחל
-            </button>
-          ) : (
-            <div className="min-h-12 rounded-2xl bg-white/5 text-center leading-[3rem] text-dust">
-              מחכים למארח
-            </div>
-          )}
+          <div className="min-h-12 rounded-2xl bg-white/5 text-center leading-[3rem] text-dust">
+            מחכים שהמנהל יתחיל
+          </div>
           {err && <p className="text-center text-sm text-red-300">{err}</p>}
         </div>
       </div>
@@ -348,6 +315,11 @@ export default function LiveGame({ code }: { code: string }) {
             <div className="flex h-11 min-w-11 flex-col items-center justify-center rounded-full bg-blood px-3">
               <div className="text-base font-extrabold tabular-nums leading-none">{fmtRemain(left)}</div>
             </div>
+          )}
+          {view.me.isHost && (
+            <Link href={`/admin/${code}`} className="text-xs text-dust underline-offset-4 hover:underline">
+              ניהול
+            </Link>
           )}
           <Link
             href="/"

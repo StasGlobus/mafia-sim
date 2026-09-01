@@ -63,7 +63,7 @@ function phaseHint(phase: GameState["phase"]): string {
     case "night_wolves":
       return "הזאבים בוחרים";
     case "night_seer":
-      return "החוזה בודק";
+      return "הרואה בודק";
     case "night_doctor":
       return "הרופא שומר";
     case "ended":

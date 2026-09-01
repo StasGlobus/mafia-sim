@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createLiveGame,
   joinLiveGame,
+  liveAdminGet,
   liveGet,
   liveNightPick,
   liveSay,
   liveVote,
+  setLiveSchedule,
   startLiveGame,
   type ActionResult,
 } from "@/lib/live";
@@ -69,6 +71,7 @@ export async function GET(req: NextRequest) {
   const code = (req.nextUrl.searchParams.get("code") ?? "").trim();
   if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
   const secret = secretFrom(req, { code }, code);
+  const asAdmin = req.nextUrl.searchParams.get("asAdmin") === "true";
   if (!secret) {
     const game = getLive(code);
     if (!game) return NextResponse.json({ error: "אין משחק כזה" }, { status: 404 });
@@ -80,6 +83,10 @@ export async function GET(req: NextRequest) {
       seats: 8,
       code: game.code,
     });
+  }
+  if (asAdmin) {
+    const result = await liveAdminGet({ code, secret });
+    return reply(req, result, code, secret);
   }
   const result = await liveGet({ code, secret });
   return reply(req, result, code, secret);
@@ -120,8 +127,28 @@ export async function POST(req: NextRequest) {
   if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
   if (!secret) return NextResponse.json({ error: "חסר מפתח" }, { status: 401 });
 
+  const asAdmin = body.asAdmin === true;
+
+  if (action === "admin" || (action === "get" && asAdmin)) {
+    const result = await liveAdminGet({ code, secret });
+    return reply(req, result, code, secret);
+  }
+  if (action === "setSchedule") {
+    const result = setLiveSchedule({
+      code,
+      secret,
+      dayStart: typeof body.dayStart === "string" ? body.dayStart : undefined,
+      dayEnd: typeof body.dayEnd === "string" ? body.dayEnd : undefined,
+      days: Array.isArray(body.days) ? (body.days as number[]) : undefined,
+    });
+    return reply(req, result, code, secret);
+  }
   if (action === "start") {
     const result = await startLiveGame({ code, secret });
+    if (result.ok && asAdmin) {
+      const admin = await liveAdminGet({ code, secret });
+      return reply(req, admin, code, secret);
+    }
     return reply(req, result, code, secret);
   }
   if (action === "say") {

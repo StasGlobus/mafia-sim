@@ -29,6 +29,12 @@ export default function Landing() {
             שחק עם חברים
           </Link>
           <Link
+            href="/admin"
+            className="flex min-h-14 items-center justify-center rounded-2xl bg-blood text-lg font-extrabold text-paper active:opacity-80"
+          >
+            ניהול משחק
+          </Link>
+          <Link
             href="/sim"
             className="flex min-h-12 items-center justify-center rounded-2xl bg-white/10 text-base font-bold text-paper/90 active:opacity-80"
           >
