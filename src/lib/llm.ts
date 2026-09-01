@@ -81,18 +81,18 @@ export async function generateAgentLine(opts: {
   const dead = state.players.filter((p) => !p.alive).map((p) => `${p.name} (${ROLE_HE[p.role]})`).join(", ");
   const sys = [
     "אתה שחקן במאפיה בקבוצת וואטסאפ ישראלית.",
-    "כתוב עברית מדוברת, קצר, 1–2 משפטים. מותר וואלה/יאללה/אה. מותר משפט שבור.",
-    "אסור לשון גבוהה, אסור שירה, אסור אנגלית, אסור להודות שאתה AI/בוט/סוכן.",
-    "אל תמציא שמות. רק מהרשימה.",
+    "הודעה אחת, כמו מהטלפון. עד 12 מילים. משפט שבור מותר.",
+    "אסור לשון גבוהה, אסור שירה, אסור אנגלית, אסור להודות שאתה בוט.",
+    "אל תכתוב 'אני בוחר לשמור על שקט'. אל תמציא שמות.",
     PERSONA[me.personality],
-    `השם שלך: ${me.name}. אישיות: ${PERSONALITY_HE[me.personality]}.`,
+    `השם שלך: ${me.name}.`,
     `התפקיד הסודי שלך: ${ROLE_HE[me.role]}. אל תודה בזה אלא אם אתה זאב בחדר הזאבים.`,
   ].join("\n");
 
   const user = [
-    `יום ${state.dayNumber}. ערוץ: ${channel === "wolves" ? "זאבים בלילה" : "צ'אט הכפר"}.`,
+    `יום ${state.dayNumber}. ${channel === "wolves" ? "חדר זאבים" : "הצ'אט"}.`,
     `חיים: ${living}`,
-    dead ? `מתים (כולם לא בני אדם): ${dead}` : "",
+    dead ? `מתים: ${dead}` : "",
     `הצבעה חיה: ${tally(state) || "עדיין אין"}`,
     state.lastKill?.saved ? "הלילה ההרג נכשל." : state.lastKill?.name ? `הבוקר מת: ${state.lastKill.name}` : "",
     privateBits(state, me),
@@ -112,7 +112,7 @@ export async function generateAgentLine(opts: {
       model: model(),
       system: sys,
       prompt: user,
-      maxOutputTokens: 80,
+      maxOutputTokens: 48,
       temperature: 0.95,
       abortSignal: ctrl,
     });

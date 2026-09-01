@@ -349,9 +349,9 @@ export async function dayPulse(state: GameState) {
 
 function roleWord(role: string) {
   if (role === "wolf") return "זאב";
-  if (role === "seer") return "חוזה";
+  if (role === "seer") return "רואה";
   if (role === "doctor") return "רופא";
-  return "כפרי";
+  return "תושב";
 }
 
 export async function wolfPulse(state: GameState) {

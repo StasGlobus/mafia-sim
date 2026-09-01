@@ -132,17 +132,17 @@ function checkWin(state: GameState): boolean {
     state.status = "ended";
     state.phase = "ended";
     state.winner = "town";
-    state.winnerText = "הכפר ניצח. הזאבים נתלו.";
+    state.winnerText = "התושבים ניצחו. הזאבים נתלו.";
     state.openChannel = "none";
-    narrator(state, "הכפר ניצח. לא היה פה בן אדם.");
-    logEvent(state, "ניצחון כפר");
+    narrator(state, "התושבים ניצחו.");
+    logEvent(state, "ניצחון תושבים");
     return true;
   }
   if (wolves.length >= town.length) {
     state.status = "ended";
     state.phase = "ended";
     state.winner = "wolves";
-    state.winnerText = "הזאבים ניצחו. נשארו יותר מדי מהם.";
+    state.winnerText = "הזאבים ניצחו.";
     state.openChannel = "none";
     narrator(state, "הזאבים ניצחו. נגמר.");
     logEvent(state, "ניצחון זאבים");
@@ -184,7 +184,7 @@ function maybeEvent(state: GameState) {
       .reverse()
       .find((m) => m.channel === "wolves" && m.authorId);
     if (wolfLine) {
-      const text = `מישהו שמע מהיער, בלי שם: «${wolfLine.text}»`;
+      const text = `מישהו שמע בלילה, בלי שם: «${wolfLine.text}»`;
       narrator(state, text);
       logEvent(state, "דליפה מערוץ הזאבים (בלי שם)");
     } else {
@@ -305,7 +305,7 @@ function resolveSeer(state: GameState) {
         text: `${t.name}: ${isWolf ? "זאב" : "לא זאב"}`,
         narrator: true,
       });
-      logEvent(state, `חוזה בדק את ${t.name} (פרטי)`);
+      logEvent(state, `רואה בדק את ${t.name} (פרטי)`);
     }
   }
   const docAlive = living(state).some((p) => p.role === "doctor");
@@ -351,7 +351,7 @@ function finishNight(state: GameState) {
       role: target.role,
       saved: true,
     };
-    narrator(state, "ניסו להרוג בלילה. מישהו שמר. ההרג נכשל.");
+    narrator(state, "ניסו להרוג. מישהו שמר. נכשל.");
     logEvent(state, "ההרג נכשל (הגנת רופא)");
   } else if (target.alive) {
     state.lastKill = {
@@ -492,9 +492,9 @@ export function startGame(config: GameConfig, speed: 1 | 2 | 4 = 1): GameState {
   }
 
   enterPhase(state, "dawn");
-  narrator(state, "שמונה שמות. אף אחד לא בן אדם.");
+  narrator(state, "שמונה שמות. מי הזאב.");
   narrator(state, pick(PHRASES.NARRATOR_DAWN, rnd));
-  narrator(state, "אין גופה עדיין. יום ראשון.");
+  narrator(state, "אין גופה. יום ראשון.");
   logEvent(state, "משחק חדש — 8 סוכנים");
   return state;
 }

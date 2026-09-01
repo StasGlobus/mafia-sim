@@ -9,11 +9,14 @@
 html,
 body {
   min-height: 100%;
+  min-height: 100dvh;
 }
 
 body {
   background: #120e0c;
   color: #f3e6cc;
+  overscroll-behavior: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 
 * {
@@ -23,22 +26,9 @@ body {
 
 .chat-scroll {
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .chat-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.phase-pulse {
-  animation: pulseGlow 1.6s ease-in-out infinite;
-}
-
-@keyframes pulseGlow {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.55;
-  }
+  width: 4px;
 }

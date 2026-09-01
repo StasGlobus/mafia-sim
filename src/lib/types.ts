@@ -105,9 +105,9 @@ export const DEFAULT_CONFIG: GameConfig = {
 };
 
 export const ROLE_HE: Record<Role, string> = {
-  villager: "כפרי",
+  villager: "תושב",
   wolf: "זאב",
-  seer: "חוזה",
+  seer: "רואה",
   doctor: "רופא",
 };
 
@@ -123,21 +123,21 @@ export const PERSONALITY_HE: Record<Personality, string> = {
 };
 
 export const PHASE_HE: Record<Phase, string> = {
-  lobby: "לובי",
-  dawn: "שחר",
-  day: "יום — דיון והצבעה",
+  lobby: "התחלה",
+  dawn: "בוקר",
+  day: "יום",
   hang: "תלייה",
-  night_wolves: "לילה — זאבים",
-  night_seer: "לילה — חוזה",
-  night_doctor: "לילה — רופא",
+  night_wolves: "לילה, זאבים",
+  night_seer: "לילה, רואה",
+  night_doctor: "לילה, רופא",
   ended: "נגמר",
 };
 
 export const CHANNEL_HE: Record<Channel, string> = {
-  public: "ציבורי",
+  public: "הצ'אט",
   wolves: "זאבים",
-  seer: "חוזה",
+  seer: "רואה",
   doctor: "רופא",
   events: "אירועים",
-  none: "אין (נעול)",
+  none: "סגור",
 };
