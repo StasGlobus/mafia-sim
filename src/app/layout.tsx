@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   title: "מאפיה",
   description: "8 שמות. מי הזאב.",
   manifest: "/manifest.json",
+  icons: {
+    icon: [{ url: "/art/icon.png", type: "image/png" }],
+    apple: [{ url: "/art/icon.png" }],
+  },
   appleWebApp: { capable: true, title: "מאפיה", statusBarStyle: "black-translucent" },
 };
 

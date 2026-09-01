@@ -6,5 +6,13 @@
   "dir": "rtl",
   "lang": "he",
   "background_color": "#120e0c",
-  "theme_color": "#120e0c"
+  "theme_color": "#120e0c",
+  "icons": [
+    {
+      "src": "/art/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
 }

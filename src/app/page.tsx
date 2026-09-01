@@ -1,5 +1,5 @@
-import Simulator from "@/components/Simulator";
+import Landing from "@/components/Landing";
 
 export default function Page() {
-  return <Simulator />;
+  return <Landing />;
 }

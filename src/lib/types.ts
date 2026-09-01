@@ -11,6 +11,7 @@ export type Personality =
 
 export type Phase =
   | "lobby"
+  | "wait"
   | "dawn"
   | "day"
   | "hang"
@@ -18,6 +19,8 @@ export type Phase =
   | "night_seer"
   | "night_doctor"
   | "ended";
+
+export type PlayerKind = "human" | "agent";
 
 export type Channel = "public" | "wolves" | "seer" | "doctor" | "events" | "none";
 
@@ -31,6 +34,9 @@ export interface Player {
   alive: boolean;
   muted: boolean;
   cannotVote: boolean;
+  kind?: PlayerKind;
+  realName?: string | null;
+  host?: boolean;
 }
 
 export interface ChatMessage {
@@ -124,6 +130,7 @@ export const PERSONALITY_HE: Record<Personality, string> = {
 
 export const PHASE_HE: Record<Phase, string> = {
   lobby: "התחלה",
+  wait: "סגור",
   dawn: "בוקר",
   day: "יום",
   hang: "תלייה",
@@ -141,3 +148,107 @@ export const CHANNEL_HE: Record<Channel, string> = {
   events: "אירועים",
   none: "סגור",
 };
+
+
+export interface LiveSchedule {
+  timezone: "Asia/Jerusalem";
+  days: number[];
+  dayStart: string;
+  dayEnd: string;
+}
+
+export const DEFAULT_SCHEDULE: LiveSchedule = {
+  timezone: "Asia/Jerusalem",
+  days: [0, 1, 2, 3, 4, 5, 6],
+  dayStart: "10:00",
+  dayEnd: "22:00",
+};
+
+export const WEEKDAYS_HE = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+
+export interface DeathReveal {
+  playerId: string;
+  name: string;
+  role: Role;
+  kind: PlayerKind;
+  realName: string | null;
+  how: string;
+  dayNumber: number;
+  ts: number;
+}
+
+export interface LiveGame extends GameState {
+  code: string;
+  hostId: string;
+  schedule: LiveSchedule;
+  startedAt: number | null;
+  secrets: Record<string, string>;
+  deaths: DeathReveal[];
+  nextLockAt: number;
+  waitWeekday: number | null;
+  lastAgentPulseAt: number;
+  windowStartAt: number;
+  nightThirdMs: number;
+  nightEndAt: number;
+}
+
+export interface LiveMeView {
+  playerId: string;
+  fakeName: string;
+  realName: string;
+  role: Role | null;
+  alive: boolean;
+  muted: boolean;
+  cannotVote: boolean;
+  isHost: boolean;
+  canSpeak: boolean;
+  canVote: boolean;
+  canNightPick: boolean;
+  nightAction: "wolf" | "seer" | "doctor" | null;
+  pack: string[];
+  inspections: { name: string; result: string }[];
+  myVote: string | null;
+  myNightPick: string | null;
+}
+
+export interface LivePlayerView {
+  id: string;
+  name: string;
+  alive: boolean;
+  isMe: boolean;
+  role: Role | null;
+  votes: number;
+  voters: string[];
+}
+
+export interface LiveView {
+  code: string;
+  sharePath: string;
+  status: "lobby" | "running" | "ended";
+  phase: Phase;
+  phaseLabel: string;
+  dayNumber: number;
+  schedule: LiveSchedule;
+  nextLockAt: string | null;
+  nextLockPretty: string | null;
+  waitText: string | null;
+  players: LivePlayerView[];
+  messages: ChatMessage[];
+  lastKill: { name: string | null; saved: boolean } | null;
+  deaths: { name: string; text: string; role: Role; kind: PlayerKind }[];
+  winner: "town" | "wolves" | null;
+  winnerText: string;
+  humansJoined: number;
+  seats: number;
+  me: LiveMeView;
+  now: string;
+}
+
+export const ROLE_ART: Record<Role, string> = {
+  villager: "/art/villager.png",
+  wolf: "/art/wolf.png",
+  seer: "/art/seer.png",
+  doctor: "/art/doctor.png",
+};
+
+export const LIVE_SEATS = 8;

@@ -25,7 +25,7 @@ import {
 } from "./agents";
 import { fill, pick, PHRASES } from "./phrases";
 
-const ROLES: Role[] = [
+export const DECK_ROLES: Role[] = [
   "wolf",
   "wolf",
   "seer",
@@ -36,7 +36,7 @@ const ROLES: Role[] = [
   "villager",
 ];
 
-const PERSONALITIES: Personality[] = [
+export const ALL_PERSONALITIES: Personality[] = [
   "chatty",
   "quiet",
   "suspicious",
@@ -53,6 +53,10 @@ function uid(prefix: string) {
 
 function durationFor(phase: Phase, config: GameConfig): number {
   switch (phase) {
+    case "wait":
+    case "lobby":
+    case "ended":
+      return 0;
     case "dawn":
       return config.dawnMs;
     case "day":
@@ -68,7 +72,7 @@ function durationFor(phase: Phase, config: GameConfig): number {
   }
 }
 
-function openFor(phase: Phase): Channel {
+export function openFor(phase: Phase): Channel {
   switch (phase) {
     case "day":
       return "public";
@@ -78,6 +82,7 @@ function openFor(phase: Phase): Channel {
       return "seer";
     case "night_doctor":
       return "doctor";
+    case "wait":
     default:
       return "none";
   }
@@ -103,7 +108,7 @@ function enterPhase(state: GameState, phase: Phase) {
   if (phase === "night_doctor") state.night.doctorTarget = null;
 }
 
-function logEvent(state: GameState, text: string) {
+export function logEvent(state: GameState, text: string) {
   state.eventLog.push(`יום ${state.dayNumber}: ${text}`);
   uniquePush(state, {
     channel: "events",
@@ -114,17 +119,17 @@ function logEvent(state: GameState, text: string) {
   });
 }
 
-function narrator(state: GameState, text: string) {
+export function narrator(state: GameState, text: string) {
   uniquePush(state, {
     channel: "public",
     authorId: null,
-    authorName: "המספר",
+    authorName: "מערכת",
     text,
     narrator: true,
   });
 }
 
-function checkWin(state: GameState): boolean {
+export function checkWin(state: GameState): boolean {
   const alive = living(state);
   const wolves = alive.filter((p) => p.role === "wolf");
   const town = alive.filter((p) => p.role !== "wolf");
@@ -151,15 +156,16 @@ function checkWin(state: GameState): boolean {
   return false;
 }
 
-function killPlayer(state: GameState, id: string, how: string) {
+export function killPlayer(state: GameState, id: string, how: string) {
   const p = state.players.find((x) => x.id === id);
   if (!p || !p.alive) return;
   p.alive = false;
-  narrator(
-    state,
-    `${p.name} ${how}. היה ${ROLE_HE[p.role]}. לא היה בן אדם.`,
-  );
-  logEvent(state, `${p.name} מת (${ROLE_HE[p.role]}) — לא היה בן אדם`);
+  const extra =
+    p.kind === "human" && p.realName
+      ? `היה ${p.realName}.`
+      : "לא היה בן אדם.";
+  narrator(state, `${p.name} ${how}. היה ${ROLE_HE[p.role]}. ${extra}`);
+  logEvent(state, `${p.name} מת (${ROLE_HE[p.role]})`);
 }
 
 function maybeEvent(state: GameState) {
@@ -201,7 +207,7 @@ function resolveDawn(state: GameState) {
   narrator(state, "בוקר. מדברים, אחר כך מצביעים.");
 }
 
-function majorityTarget(state: GameState): string | null {
+export function majorityTarget(state: GameState): string | null {
   const alive = living(state);
   const need = Math.floor(alive.length / 2) + 1;
   const counts: Record<string, number> = {};
@@ -443,8 +449,8 @@ export function idleState(config: GameConfig = DEFAULT_CONFIG): GameState {
 export function startGame(config: GameConfig, speed: 1 | 2 | 4 = 1): GameState {
   const now = Date.now();
   const names = pickNames(8, rnd);
-  const roles = shuffle(ROLES, rnd);
-  const personalities = shuffle(PERSONALITIES, rnd);
+  const roles = shuffle(DECK_ROLES, rnd);
+  const personalities = shuffle(ALL_PERSONALITIES, rnd);
   const players: Player[] = names.map((name, i) => ({
     id: `p${i + 1}`,
     name,

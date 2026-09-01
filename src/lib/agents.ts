@@ -87,9 +87,12 @@ export function uniquePush(
     msg.channel === state.openChannel;
   if (!allowed) return;
   if (msg.channel === "public" && !msg.narrator) {
-    if (state.usedPublicTexts.includes(msg.text)) return;
-    state.usedPublicTexts.push(msg.text);
-    if (state.usedPublicTexts.length > 80) state.usedPublicTexts.shift();
+    const author = msg.authorId ? state.players.find((p) => p.id === msg.authorId) : null;
+    if (author?.kind !== "human") {
+      if (state.usedPublicTexts.includes(msg.text)) return;
+      state.usedPublicTexts.push(msg.text);
+      if (state.usedPublicTexts.length > 80) state.usedPublicTexts.shift();
+    }
   }
   state.messages.push({
     id: `m${state.messages.length + 1}_${Math.floor(rnd() * 1e6)}`,
@@ -259,6 +262,7 @@ export async function dayPulse(state: GameState) {
 
   if (state.openChannel === "public") {
     const candidates = alive.filter((me) => {
+      if (me.kind === "human") return false;
       if (me.muted) return false;
       const m = mem(state, me.id);
       if (m.messagesToday >= maxMessages(me.personality)) return false;
@@ -295,6 +299,7 @@ export async function dayPulse(state: GameState) {
   // votes start after ~20% of day
   if (progress < 0.18) return;
   for (const me of alive) {
+    if (me.kind === "human") continue;
     if (me.cannotVote) continue;
     const m = mem(state, me.id);
     const has = Boolean(state.votes[me.id]);
@@ -335,6 +340,7 @@ export async function dayPulse(state: GameState) {
     if (lead && leadN >= 2 && leadN < need) {
       const leadP = state.players.find((x) => x.id === lead);
       for (const me of alive) {
+        if (me.kind === "human") continue;
         if (me.cannotVote) continue;
         if (state.votes[me.id] === lead) continue;
         if (me.role === "wolf" && leadP?.role === "wolf") continue;
@@ -357,12 +363,15 @@ function roleWord(role: string) {
 export async function wolfPulse(state: GameState) {
   if (state.openChannel !== "wolves") return;
   const wolves = living(state).filter((p) => p.role === "wolf");
-  const targetId = pickWolfKill(state);
+  const agents = wolves.filter((p) => p.kind !== "human");
+  if (!agents.length) return;
+  const humanLocked = wolves.some((p) => p.kind === "human") && Boolean(state.night.wolfTarget);
+  const targetId = humanLocked ? state.night.wolfTarget : pickWolfKill(state);
   state.night.wolfTarget = targetId;
   const tName = state.players.find((p) => p.id === targetId)?.name ?? "מישהו";
   const progress =
     state.phaseDurationMs <= 0 ? 1 : state.phaseElapsedMs / state.phaseDurationMs;
-  const w = wolves.find((w) => mem(state, w.id).messagesToday < 2);
+  const w = agents.find((w) => mem(state, w.id).messagesToday < 2);
   if (w && progress > 0.12 && rnd() < 0.55) {
     const m = mem(state, w.id);
     const llm = await generateAgentLine({ state, me: w, channel: "wolves" });
@@ -383,6 +392,7 @@ export async function wolfPulse(state: GameState) {
 export function seerPulse(state: GameState) {
   const seer = living(state).find((p) => p.role === "seer");
   if (!seer || state.openChannel !== "seer") return;
+  if (seer.kind === "human") return;
   const id = pickSeerInspect(state, seer);
   state.night.seerTarget = id;
 }
@@ -390,6 +400,7 @@ export function seerPulse(state: GameState) {
 export function doctorPulse(state: GameState) {
   const doc = living(state).find((p) => p.role === "doctor");
   if (!doc || state.openChannel !== "doctor") return;
+  if (doc.kind === "human") return;
   const id = pickDoctorSave(state, doc);
   state.night.doctorTarget = id;
 }
