@@ -10,8 +10,9 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "מאפיה — סימולטור סוכנים",
-  description: "שמונה סוכנים משחקים מאפיה. מבט אלוהים + כיכר.",
+  title: "מאפיה",
+  description: "שמונה שמות. מי הזאב.",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({

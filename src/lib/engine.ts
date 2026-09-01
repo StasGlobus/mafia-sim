@@ -132,9 +132,9 @@ function checkWin(state: GameState): boolean {
     state.status = "ended";
     state.phase = "ended";
     state.winner = "town";
-    state.winnerText = "הכפר ניצח. כל הזאבים נתלו.";
+    state.winnerText = "הכפר ניצח. הזאבים נתלו.";
     state.openChannel = "none";
-    narrator(state, "הכפר ניצח. הזאבים אינם. לא היה ביניהם בן אדם.");
+    narrator(state, "הכפר ניצח. לא היה פה בן אדם.");
     logEvent(state, "ניצחון כפר");
     return true;
   }
@@ -142,9 +142,9 @@ function checkWin(state: GameState): boolean {
     state.status = "ended";
     state.phase = "ended";
     state.winner = "wolves";
-    state.winnerText = "הזאבים ניצחו. הם שווים או רבים מהכפר החי.";
+    state.winnerText = "הזאבים ניצחו. נשארו יותר מדי מהם.";
     state.openChannel = "none";
-    narrator(state, "הזאבים ניצחו. הלילה כבר לא נגמר.");
+    narrator(state, "הזאבים ניצחו. נגמר.");
     logEvent(state, "ניצחון זאבים");
     return true;
   }
@@ -157,7 +157,7 @@ function killPlayer(state: GameState, id: string, how: string) {
   p.alive = false;
   narrator(
     state,
-    `${p.name} ${how}. תפקיד: ${ROLE_HE[p.role]}. לא היה בן אדם.`,
+    `${p.name} ${how}. היה ${ROLE_HE[p.role]}. לא היה בן אדם.`,
   );
   logEvent(state, `${p.name} מת (${ROLE_HE[p.role]}) — לא היה בן אדם`);
 }
@@ -171,12 +171,12 @@ function maybeEvent(state: GameState) {
   const roll = rnd();
   if (roll < 0.34) {
     victim.muted = true;
-    const text = `אירוע: ${victim.name} נאלם. לא יכתוב ביום הקרוב.`;
+    const text = `${victim.name} נסתם. לא כותב היום.`;
     narrator(state, text);
     logEvent(state, text);
   } else if (roll < 0.67) {
     victim.cannotVote = true;
-    const text = `אירוע: ${victim.name} לא יצביע היום.`;
+    const text = `${victim.name} בלי הצבעה היום.`;
     narrator(state, text);
     logEvent(state, text);
   } else {
@@ -184,12 +184,12 @@ function maybeEvent(state: GameState) {
       .reverse()
       .find((m) => m.channel === "wolves" && m.authorId);
     if (wolfLine) {
-      const text = `לחישה מהיער נשמעה בכיכר: «${wolfLine.text}»`;
+      const text = `מישהו שמע מהיער, בלי שם: «${wolfLine.text}»`;
       narrator(state, text);
       logEvent(state, "דליפה מערוץ הזאבים (בלי שם)");
     } else {
       victim.muted = true;
-      const text = `אירוע: ${victim.name} נאלם. לא יכתוב ביום הקרוב.`;
+      const text = `${victim.name} נסתם. לא כותב היום.`;
       narrator(state, text);
       logEvent(state, text);
     }
@@ -198,7 +198,7 @@ function maybeEvent(state: GameState) {
 
 function resolveDawn(state: GameState) {
   enterPhase(state, "day");
-  narrator(state, "הכיכר מתמלאת. דיבורים. אחר כך הצבעה.");
+  narrator(state, "בוקר. מדברים, אחר כך מצביעים.");
 }
 
 function majorityTarget(state: GameState): string | null {
@@ -239,7 +239,7 @@ function resolveDay(state: GameState) {
   }
   if (target) {
     const name = state.players.find((p) => p.id === target)?.name ?? "";
-    narrator(state, `יש רוב. ${name} עולה.`);
+    narrator(state, `יש רוב. ${name}.`);
     enterPhase(state, "hang");
   } else {
     narrator(state, pick(PHRASES.NARRATOR_NO_HANG, rnd));
@@ -250,7 +250,7 @@ function resolveDay(state: GameState) {
 
 function resolveHang(state: GameState) {
   if (state.hangTarget) {
-    killPlayer(state, state.hangTarget, "נתלה בכיכר");
+    killPlayer(state, state.hangTarget, "נתלה");
     state.hangTarget = null;
     if (checkWin(state)) return;
   }
@@ -343,7 +343,7 @@ function finishNight(state: GameState) {
 
   if (!target || !targetId) {
     state.lastKill = { playerId: null, name: null, role: null, saved: false };
-    narrator(state, "הלילה עבר בלי דם. מוזר.");
+    narrator(state, "הלילה עבר בלי גופה. מוזר.");
   } else if (saved) {
     state.lastKill = {
       playerId: target.id,
@@ -351,7 +351,7 @@ function finishNight(state: GameState) {
       role: target.role,
       saved: true,
     };
-    narrator(state, "מישהו ניסה להרוג בלילה — והרופא היה שם. ההרג נכשל.");
+    narrator(state, "ניסו להרוג בלילה. מישהו שמר. ההרג נכשל.");
     logEvent(state, "ההרג נכשל (הגנת רופא)");
   } else if (target.alive) {
     state.lastKill = {
@@ -360,7 +360,7 @@ function finishNight(state: GameState) {
       role: target.role,
       saved: false,
     };
-    killPlayer(state, target.id, "נמצא מת עם שחר");
+    killPlayer(state, target.id, "נמצא מת בבוקר");
   }
 
   if (checkWin(state)) return;
@@ -392,13 +392,13 @@ function resolveCurrent(state: GameState) {
   }
 }
 
-function pulse(state: GameState) {
+async function pulse(state: GameState) {
   switch (state.phase) {
     case "day":
-      dayPulse(state);
+      await dayPulse(state);
       break;
     case "night_wolves":
-      wolfPulse(state);
+      await wolfPulse(state);
       break;
     case "night_seer":
       seerPulse(state);
@@ -492,14 +492,14 @@ export function startGame(config: GameConfig, speed: 1 | 2 | 4 = 1): GameState {
   }
 
   enterPhase(state, "dawn");
-  narrator(state, "שמונה שמות בכיכר. אף אחד מהם לא בן אדם.");
+  narrator(state, "שמונה שמות. אף אחד לא בן אדם.");
   narrator(state, pick(PHRASES.NARRATOR_DAWN, rnd));
-  narrator(state, "אין גופה. עדיין. היום הראשון מתחיל.");
+  narrator(state, "אין גופה עדיין. יום ראשון.");
   logEvent(state, "משחק חדש — 8 סוכנים");
   return state;
 }
 
-export function tick(state: GameState, now = Date.now()): GameState {
+export async function tick(state: GameState, now = Date.now()): Promise<GameState> {
   if (state.status !== "running") {
     state.lastTickAt = now;
     return state;
@@ -512,7 +512,7 @@ export function tick(state: GameState, now = Date.now()): GameState {
 
   if (now - state.lastPulseAt >= 700) {
     state.lastPulseAt = now;
-    pulse(state);
+    await pulse(state);
   }
 
   let guard = 0;
@@ -531,21 +531,21 @@ export function tick(state: GameState, now = Date.now()): GameState {
   return state;
 }
 
-export function applyControl(
+export async function applyControl(
   state: GameState,
   action: string,
   extra?: { speed?: 1 | 2 | 4; config?: Partial<GameConfig> },
-): GameState {
+): Promise<GameState> {
   const now = Date.now();
   if (action === "pause" && state.status === "running") {
-    tick(state, now);
+    await tick(state, now);
     state.status = "paused";
     state.lastTickAt = now;
   } else if (action === "resume" && state.status === "paused") {
     state.status = "running";
     state.lastTickAt = now;
   } else if (action === "setSpeed" && extra?.speed) {
-    tick(state, now);
+    await tick(state, now);
     state.speed = extra.speed;
     state.lastTickAt = now;
   } else if (action === "setConfig" && extra?.config) {

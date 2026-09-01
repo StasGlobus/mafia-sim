@@ -28,6 +28,16 @@ function fmt(ms: number): string {
   return m > 0 ? `${m}:${r.toString().padStart(2, "0")}` : `${r} שנ׳`;
 }
 
+const AVATAR = ["#c45c26", "#7a9e6a", "#c9a227", "#6b8cae", "#a85c7a", "#5c9e9a", "#b86b4a", "#8a7cc0"];
+function colorFor(id: string) {
+  let n = 0;
+  for (let i = 0; i < id.length; i++) n = (n + id.charCodeAt(i) * (i + 1)) % AVATAR.length;
+  return AVATAR[n]!;
+}
+function initial(name: string) {
+  return name.trim().slice(0, 1) || "?";
+}
+
 function voteTally(s: GameState) {
   const counts: Record<string, { name: string; n: number; voters: string[] }> = {};
   for (const p of s.players.filter((p) => p.alive)) {
@@ -126,8 +136,8 @@ export default function Simulator() {
       <header className="sticky top-0 z-20 border-b border-[#3a2c22] bg-[#120e0c]/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 py-2">
           <div>
-            <div className="text-lg font-extrabold tracking-tight">מאפיה · סימולטור</div>
-            <div className="text-xs text-dust">8 סוכנים · אין בני אדם · כיכר + אלוהים</div>
+            <div className="text-lg font-extrabold tracking-tight">מאפיה</div>
+            <div className="text-xs text-dust">8 שמות. מי הזאב.</div>
           </div>
           {state.status !== "idle" && (
             <div className="flex items-center gap-2 text-sm">
@@ -175,7 +185,7 @@ export default function Simulator() {
                   className={`py-2 text-sm font-bold ${tab === "public" ? "bg-paper text-ink" : "bg-[#1c1714]"}`}
                   onClick={() => setTab("public")}
                 >
-                  כיכר
+                  צ'אט
                 </button>
                 <button
                   className={`py-2 text-sm font-bold ${tab === "god" ? "bg-paper text-ink" : "bg-[#1c1714]"}`}
@@ -226,9 +236,9 @@ function EmptyStart({
   return (
     <main className="mx-auto flex max-w-lg flex-col items-stretch gap-6 px-4 py-12">
       <div className="text-center">
-        <h1 className="text-4xl font-extrabold">הכפר ריק</h1>
+        <h1 className="text-4xl font-extrabold">8 שמות. מי הזאב.</h1>
         <p className="mt-2 text-dust">
-          שמונה סוכנים. שני זאבים, חוזה, רופא, ארבעה כפריים. אף אחד לא בן אדם.
+          שני זאבים, חוזה, רופא, ארבעה תושבים. כולם כותבים כמו אנשים. אף אחד לא.
         </p>
       </div>
       <ConfigFields config={config} setConfig={setConfig} />
@@ -362,21 +372,29 @@ function PublicPane({
   return (
     <div className="flex h-[calc(100dvh-11rem)] flex-col overflow-hidden rounded-xl border border-[#3a2c22] bg-[#1a1410]">
       <div className="border-b border-[#3a2c22] px-3 py-2 text-sm font-bold">
-        כיכר הכפר
-        <span className="mr-2 font-normal text-dust">מה ששחקן היה רואה</span>
+        הצ'אט
+        <span className="mr-2 font-normal text-dust">מה ששחקן רואה</span>
       </div>
       <div className="chat-scroll min-h-0 flex-1 space-y-2 p-3">
         {msgs.map((m) => (
           <div key={m.id} className={m.narrator ? "text-center" : ""}>
             {m.narrator ? (
-              <div className="mx-auto max-w-md rounded bg-[#2a2118] px-3 py-2 text-sm italic text-[#e8d7b0]">
+              <div className="mx-auto max-w-md rounded-xl bg-[#2a2118] px-3 py-2 text-center text-sm text-[#e8d7b0]">
                 {m.text}
               </div>
             ) : (
-              <div className="max-w-[92%]">
-                <div className="text-xs text-dust">{m.authorName}</div>
-                <div className="inline-block rounded-2xl rounded-tr-sm bg-[#2f241c] px-3 py-2 text-sm">
-                  {m.text}
+              <div className="flex max-w-[92%] items-end gap-2">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-ink"
+                  style={{ background: colorFor(m.authorId ?? m.authorName) }}
+                >
+                  {initial(m.authorName)}
+                </div>
+                <div>
+                  <div className="mb-0.5 text-[11px] text-dust">{m.authorName}</div>
+                  <div className="inline-block rounded-2xl rounded-tr-sm bg-[#2f241c] px-3 py-2 text-sm leading-snug">
+                    {m.text}
+                  </div>
                 </div>
               </div>
             )}
@@ -391,13 +409,19 @@ function PublicPane({
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {tally.map(([id, v]) => (
-              <div key={id} className="rounded bg-[#2a2118] px-2 py-1 text-sm">
-                <div className="flex justify-between font-bold">
-                  <span>{v.name}</span>
+              <div key={id} className="rounded-lg bg-[#2a2118] px-2 py-2 text-sm">
+                <div className="mb-1 flex justify-between font-bold">
+                  <span className="truncate">{v.name}</span>
                   <span>{v.n}</span>
                 </div>
-                <div className="truncate text-[10px] text-dust">
-                  {v.voters.length ? v.voters.join(", ") : "—"}
+                <div className="h-1.5 overflow-hidden rounded bg-[#14100c]">
+                  <div
+                    className="h-full rounded bg-paper/80"
+                    style={{ width: `${majorityNeed ? Math.min(100, (v.n / majorityNeed) * 100) : 0}%` }}
+                  />
+                </div>
+                <div className="mt-1 truncate text-[10px] text-dust">
+                  {v.voters.length ? v.voters.join(", ") : ""}
                 </div>
               </div>
             ))}

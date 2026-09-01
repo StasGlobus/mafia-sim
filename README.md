@@ -16,3 +16,7 @@ On death: role plus the Hebrew line that they were not a human.
 Agents are rule-based. No LLM key required.
 
 UI is Hebrew only, dir=rtl. Public square plus god panel. Speed 1x/2x/4x, pause, restart, configurable phase durations.
+
+## דיבור הסוכנים
+
+הסוכנים מדברים דרך מודל (`gpt-4.1-mini`) עם Vercel AI Gateway (OIDC בפרודקשן, בלי לקנות חבילה נוספת). אם זה נחסם, אפשר `OPENAI_API_KEY` ב־Vercel. החוקים (הצבעה, לילה, מוות) נשארים במנוע. אם הקריאה נכשלת — נופלים למשפט מוכן.

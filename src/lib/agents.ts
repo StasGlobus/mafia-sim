@@ -5,6 +5,7 @@ import type {
   Player,
 } from "./types";
 import { fill, lineFor, pick, PHRASES, type SpeakKind } from "./phrases";
+import { generateAgentLine } from "./llm";
 
 export function rnd(): number {
   return Math.random();
@@ -251,38 +252,44 @@ function kindForDay(state: GameState, me: Player, progress: number): SpeakKind {
   return "vote";
 }
 
-export function dayPulse(state: GameState) {
+export async function dayPulse(state: GameState) {
   const progress =
     state.phaseDurationMs <= 0 ? 1 : state.phaseElapsedMs / state.phaseDurationMs;
   const alive = living(state);
 
-  for (const me of alive) {
-    if (me.muted) continue;
-    if (state.openChannel !== "public") continue;
-    const m = mem(state, me.id);
-    if (m.messagesToday >= maxMessages(me.personality)) continue;
-    if (m.spokeAtProgress.some((x) => Math.abs(x - progress) < 0.08)) continue;
-    if (rnd() > speakChance(me.personality) * (progress < 0.08 ? 1.4 : 1)) continue;
-
-    const cands = others(state, me);
-    const t = randomTarget(cands);
-    const kind = kindForDay(state, me, progress);
-    const vars = {
-      t: t?.name ?? "מישהו",
-      d: state.lastKill?.name ?? "מישהו",
-      r: state.lastKill?.role ? roleWord(state.lastKill.role) : "?",
-    };
-    const text = lineFor(me.personality, kind, vars, rnd);
-    if (!text || text === m.lastText) continue;
-    uniquePush(state, {
-      channel: "public",
-      authorId: me.id,
-      authorName: me.name,
-      text,
+  if (state.openChannel === "public") {
+    const candidates = alive.filter((me) => {
+      if (me.muted) return false;
+      const m = mem(state, me.id);
+      if (m.messagesToday >= maxMessages(me.personality)) return false;
+      if (m.spokeAtProgress.some((x) => Math.abs(x - progress) < 0.08)) return false;
+      return rnd() <= speakChance(me.personality) * (progress < 0.08 ? 1.4 : 1);
     });
-    m.lastText = text;
-    m.messagesToday += 1;
-    m.spokeAtProgress.push(progress);
+    const me = candidates.length ? pick(candidates, rnd) : null;
+    if (me) {
+      const m = mem(state, me.id);
+      const cands = others(state, me);
+      const t = randomTarget(cands);
+      const kind = kindForDay(state, me, progress);
+      const vars = {
+        t: t?.name ?? "מישהו",
+        d: state.lastKill?.name ?? "מישהו",
+        r: state.lastKill?.role ? roleWord(state.lastKill.role) : "?",
+      };
+      const llm = await generateAgentLine({ state, me, channel: "public" });
+      const text = llm ?? lineFor(me.personality, kind, vars, rnd);
+      if (text && text !== m.lastText) {
+        uniquePush(state, {
+          channel: "public",
+          authorId: me.id,
+          authorName: me.name,
+          text,
+        });
+        m.lastText = text;
+        m.messagesToday += 1;
+        m.spokeAtProgress.push(progress);
+      }
+    }
   }
 
   // votes start after ~20% of day
@@ -347,7 +354,7 @@ function roleWord(role: string) {
   return "כפרי";
 }
 
-export function wolfPulse(state: GameState) {
+export async function wolfPulse(state: GameState) {
   if (state.openChannel !== "wolves") return;
   const wolves = living(state).filter((p) => p.role === "wolf");
   const targetId = pickWolfKill(state);
@@ -355,13 +362,12 @@ export function wolfPulse(state: GameState) {
   const tName = state.players.find((p) => p.id === targetId)?.name ?? "מישהו";
   const progress =
     state.phaseDurationMs <= 0 ? 1 : state.phaseElapsedMs / state.phaseDurationMs;
-  for (const w of wolves) {
+  const w = wolves.find((w) => mem(state, w.id).messagesToday < 2);
+  if (w && progress > 0.12 && rnd() < 0.55) {
     const m = mem(state, w.id);
-    if (m.messagesToday >= 2) continue;
-    if (progress > 0.15 && rnd() < 0.45) {
-      const text = fill(pick(PHRASES.WOLF_NIGHT, rnd), { t: tName });
-      if (text === m.lastText) continue;
-      if (state.messages.filter((x) => x.channel === "wolves").some((x) => x.text === text)) continue;
+    const llm = await generateAgentLine({ state, me: w, channel: "wolves" });
+    const text = llm ?? fill(pick(PHRASES.WOLF_NIGHT, rnd), { t: tName });
+    if (text && text !== m.lastText) {
       uniquePush(state, {
         channel: "wolves",
         authorId: w.id,

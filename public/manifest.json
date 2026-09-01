@@ -1,0 +1,10 @@
+{
+  "name": "מאפיה",
+  "short_name": "מאפיה",
+  "start_url": "/",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "he",
+  "background_color": "#120e0c",
+  "theme_color": "#120e0c"
+}

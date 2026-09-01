@@ -5,6 +5,7 @@ import { DEFAULT_CONFIG, type GameConfig, type Speed } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 20;
 
 export async function GET() {
   const state = getState();
@@ -34,12 +35,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "tick") {
-    state = tick(state);
+    state = await tick(state);
     setState(state);
     return NextResponse.json(state);
   }
 
-  state = applyControl(state, action, {
+  state = await applyControl(state, action, {
     speed: body.speed,
     config: body.config,
   });
