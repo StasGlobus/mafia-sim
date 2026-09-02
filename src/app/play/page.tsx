@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { ROOM_CODE_LENGTH } from "@/lib/types";
 
 function saveMe(code: string, me: { playerId: string; secret: string; fakeName: string }) {
   try {
@@ -14,7 +15,7 @@ function saveMe(code: string, me: { playerId: string; secret: string; fakeName: 
 }
 
 function cleanRoomCode(value: string) {
-  return value.replace(/[\s-]/g, "").slice(0, 4);
+  return value.replace(/[\s-]/g, "").toUpperCase().slice(0, ROOM_CODE_LENGTH);
 }
 
 export default function PlayPage() {
@@ -74,11 +75,11 @@ export default function PlayPage() {
             <p className="text-sm font-black text-ember">הצטרפות למשחק</p>
             <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">הכפר מחכה<br />לזהות החדשה שלך.</h1>
             <p className="mt-5 max-w-lg text-lg leading-8 text-paper/60">
-              נכנסים עם הקוד שקיבלתם מהמנהל. השם האמיתי נשאר פרטי — במשחק תקבלו שם אחר שאף אחד לא מזהה.
+              נכנסים עם הקוד שקיבלתם מהמנהל. מנהל המשחק קובע אם הכפר משחק בזהויות אמיתיות או בשמות בדויים.
             </p>
             <div className="mt-8 hidden gap-3 text-sm text-paper/55 sm:flex">
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">עד 8 שחקנים</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">הבוטים משלימים כיסאות</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">5–12 שחקנים</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">עם או בלי שחקני AI</span>
             </div>
           </section>
 
@@ -101,7 +102,7 @@ export default function PlayPage() {
                   maxLength={24}
                   required
                 />
-                <span className="mt-2 block text-xs text-paper/40">רק לך ולמנהל תהיה גישה לשם הזה.</span>
+                <span className="mt-2 block text-xs text-paper/40">המשחק יציג אותו רק אם המנהל בחר שמות אמיתיים.</span>
               </label>
 
               <label className="block" htmlFor="room-code">
@@ -109,13 +110,13 @@ export default function PlayPage() {
                 <input
                   id="room-code"
                   className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/25 px-4 text-center font-mono text-2xl font-black tracking-[.32em] text-paper placeholder:text-paper/20 transition focus:border-ember/70 focus:bg-black/35 focus:outline-none"
-                  placeholder="אבג7"
+                  placeholder="N7GHT2"
                   value={code}
                   onChange={(event) => setCode(cleanRoomCode(event.target.value))}
                   autoCapitalize="characters"
                   autoCorrect="off"
                   spellCheck={false}
-                  maxLength={4}
+                  maxLength={ROOM_CODE_LENGTH}
                   required
                 />
               </label>
@@ -124,7 +125,7 @@ export default function PlayPage() {
 
               <button
                 type="submit"
-                disabled={busy || !realName.trim() || code.length !== 4}
+                disabled={busy || !realName.trim() || code.length !== ROOM_CODE_LENGTH}
                 className="min-h-16 w-full rounded-2xl bg-paper px-5 text-lg font-black text-ink shadow-[0_14px_35px_rgba(0,0,0,.2)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {busy ? "נכנסים…" : "קחו אותי לכפר"}

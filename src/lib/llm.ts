@@ -16,7 +16,7 @@ const PERSONA: Record<Player["personality"], string> = {
   naive: "תמים. מאמין לאנשים. מתנצל אם חושד.",
 };
 
-function model() {
+export function gameModel() {
   const key = process.env.OPENAI_API_KEY;
   if (key) return createOpenAI({ apiKey: key })(MINI);
   return `openai/${MINI}` as const;
@@ -115,7 +115,7 @@ export async function generateAgentLine(opts: {
   try {
     const ctrl = AbortSignal.timeout(replyTo ? 5000 : 8000);
     const { text } = await generateText({
-      model: model(),
+      model: gameModel(),
       system: sys,
       prompt: user,
       maxOutputTokens: 48,

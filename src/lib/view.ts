@@ -1,5 +1,5 @@
 import type { AdminView, LiveGame, LiveView, Player, Role } from "./types";
-import { PHASE_HE, ROLE_HE, WEEKDAYS_HE } from "./types";
+import { DEFAULT_LIVE_RULES, PHASE_HE, ROLE_HE, WEEKDAYS_HE } from "./types";
 
 function pad(n: number) {
   return n.toString().padStart(2, "0");
@@ -47,6 +47,9 @@ function entitledChannel(me: Player, channel: string): boolean {
 }
 
 export function playerView(game: LiveGame, me: Player, now = Date.now()): LiveView {
+  const rules = { ...DEFAULT_LIVE_RULES, ...game.rules };
+  game.rules = rules;
+  game.directorEvents ??= [];
   const lobby = game.phase === "lobby" || game.status === "idle";
   const running = game.status === "running";
   const ended = game.status === "ended" || game.phase === "ended";
@@ -149,7 +152,9 @@ export function playerView(game: LiveGame, me: Player, now = Date.now()): LiveVi
     winner: game.winner,
     winnerText: game.winnerText,
     humansJoined: game.players.filter((p) => p.kind === "human").length,
-    seats: 8,
+    seats: rules.seats,
+    rules,
+    directorEvents: game.directorEvents,
     me: {
       playerId: me.id,
       fakeName: me.name,

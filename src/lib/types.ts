@@ -24,7 +24,41 @@ export type PlayerKind = "human" | "agent";
 
 export type Channel = "public" | "wolves" | "seer" | "doctor" | "events" | "none";
 
-export type Speed = 1 | 2 | 4;
+export type Speed = 1 | 2 | 4 | 8 | 16;
+export type IdentityMode = "aliases" | "real";
+export type BotMode = "fill" | "humans_only";
+export type DirectorStyle = "classic" | "dynamic" | "wild";
+
+export interface LiveRules {
+  seats: number;
+  wolfCount: number;
+  hasSeer: boolean;
+  hasDoctor: boolean;
+  identityMode: IdentityMode;
+  botMode: BotMode;
+  directorStyle: DirectorStyle;
+}
+
+export const DEFAULT_LIVE_RULES: LiveRules = {
+  seats: 8,
+  wolfCount: 2,
+  hasSeer: true,
+  hasDoctor: true,
+  identityMode: "aliases",
+  botMode: "fill",
+  directorStyle: "dynamic",
+};
+
+export type DirectorEventType = "omen" | "silence" | "lost_vote" | "leak" | "blood_moon";
+
+export interface DirectorEvent {
+  id: string;
+  type: DirectorEventType;
+  title: string;
+  text: string;
+  dayNumber: number;
+  ts: number;
+}
 
 export interface Player {
   id: string;
@@ -204,6 +238,8 @@ export interface LiveGame extends GameState {
   windowStartAt: number;
   nightThirdMs: number;
   nightEndAt: number;
+  rules: LiveRules;
+  directorEvents: DirectorEvent[];
 }
 
 export interface LiveMeView {
@@ -254,6 +290,8 @@ export interface LiveView {
   winnerText: string;
   humansJoined: number;
   seats: number;
+  rules: LiveRules;
+  directorEvents: DirectorEvent[];
   me: LiveMeView;
   now: string;
 }
@@ -290,3 +328,6 @@ export const ROLE_ART: Record<Role, string> = {
 };
 
 export const LIVE_SEATS = 8;
+export const MIN_LIVE_SEATS = 5;
+export const MAX_LIVE_SEATS = 12;
+export const ROOM_CODE_LENGTH = 6;

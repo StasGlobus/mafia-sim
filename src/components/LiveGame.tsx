@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { LiveView } from "@/lib/types";
 import { ROLE_ART, ROLE_HE } from "@/lib/types";
 
-type Tab = "chat" | "people" | "me";
+type Tab = "village" | "role" | "people" | "me";
 type StoredMe = { playerId: string; secret: string; fakeName: string };
 
 const AVATAR = ["#e8a87c", "#7dcea0", "#f7dc6f", "#85c1e9", "#d7bde2", "#76d7c4", "#f5b7b1", "#aed6f1"];
@@ -103,7 +103,7 @@ export default function LiveGame({ code }: { code: string }) {
   const [view, setView] = useState<LiveView | null>(null);
   const [identity, setIdentity] = useState<StoredMe | null>(null);
   const [realName, setRealName] = useState("");
-  const [tab, setTab] = useState<Tab>("chat");
+  const [tab, setTab] = useState<Tab>("village");
   const [err, setErr] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -175,8 +175,12 @@ export default function LiveGame({ code }: { code: string }) {
   }, []);
 
   useEffect(() => {
-    if (tab === "chat") publicEnd.current?.scrollIntoView({ block: "end" });
+    if (tab === "village" || tab === "role") publicEnd.current?.scrollIntoView({ block: "end" });
   }, [view?.messages.length, tab]);
+
+  useEffect(() => {
+    if (view?.me.canNightPick) setTab("role");
+  }, [view?.me.canNightPick, view?.phase]);
 
   async function join(e: FormEvent) {
     e.preventDefault();
@@ -313,6 +317,11 @@ export default function LiveGame({ code }: { code: string }) {
   }
 
   const majorityNeed = Math.floor(view.players.filter((p) => p.alive).length / 2) + 1;
+  const roleChannel = view.me.role === "wolf" ? "wolves" : view.me.role === "seer" ? "seer" : view.me.role === "doctor" ? "doctor" : null;
+  const activeChannel = tab === "role" ? roleChannel : "public";
+  const roleChannelLabel = view.me.role === "wolf" ? "ערוץ הזאבים" : view.me.role === "seer" ? "יומן הרואה" : view.me.role === "doctor" ? "יומן הרופא" : "אין לך ערוץ פרטי";
+  const roleChannelHint = view.me.role === "wolf" ? "רק חברי הלהקה רואים וכותבים כאן בלילה" : view.me.role === "seer" ? "רק תוצאות הבדיקות שלך מופיעות כאן" : view.me.role === "doctor" ? "רק בחירות השמירה שלך מופיעות כאן" : "לתושבים אין שיחת לילה פרטית";
+  const canCompose = view.me.canSpeak && ((tab === "village" && view.phase === "day") || (tab === "role" && view.phase === "night_wolves" && view.me.role === "wolf"));
 
   return (
     <div className={`flex min-h-dvh flex-col text-paper ${night ? "bg-[#07060a]" : "bg-night"}`}>
@@ -363,11 +372,22 @@ export default function LiveGame({ code }: { code: string }) {
       )}
 
       <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col">
-        <div className={`min-h-0 flex-1 ${tab === "chat" ? "flex" : "hidden"}`}>
+        <div className={`min-h-0 flex-1 ${tab === "village" || tab === "role" ? "flex" : "hidden"}`}>
           <div className="flex min-h-0 w-full flex-1 flex-col">
+            {tab === "role" && (
+              <div className="border-b border-white/10 bg-blood/15 px-4 py-3">
+                <div className="font-extrabold">{roleChannelLabel}</div>
+                <div className="mt-0.5 text-xs text-dust">{roleChannelHint}</div>
+                {view.me.canNightPick && (
+                  <button type="button" onClick={() => setTab("people")} className="mt-2 rounded-full bg-paper px-3 py-1.5 text-xs font-black text-ink">
+                    {view.me.nightAction === "wolf" ? "בחירת קורבן" : view.me.nightAction === "seer" ? "בחירת בדיקה" : "בחירת שמירה"}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="chat-scroll min-h-0 flex-1 space-y-3 px-3 py-3">
               {view.messages
-                .filter((m) => m.channel !== "events")
+                .filter((m) => m.channel === activeChannel)
                 .map((m) => {
                   const repliedTo = m.replyToId
                     ? view.messages.find((candidate) => candidate.id === m.replyToId)
@@ -402,9 +422,9 @@ export default function LiveGame({ code }: { code: string }) {
                 })}
               <div ref={publicEnd} />
             </div>
-            {view.me.canSpeak ? (
+            {canCompose ? (
               <div className="border-t border-white/10">
-                {view.phase === "day" && (
+                {tab === "village" && view.phase === "day" && (
                   <div className="chat-scroll flex items-center gap-1.5 overflow-x-auto px-3 pb-1 pt-2" aria-label="פנייה מהירה לשחקן">
                     <span className="shrink-0 text-[11px] text-dust">לפנות אל</span>
                     {view.players.filter((player) => player.alive && !player.isMe).map((player) => (
@@ -429,7 +449,7 @@ export default function LiveGame({ code }: { code: string }) {
                   <input
                     ref={messageInput}
                     className="min-h-12 min-w-0 flex-1 rounded-2xl bg-white/10 px-4 text-paper"
-                    placeholder={view.phase === "night_wolves" ? "לחבילה…" : "כתבו שם בתחילת ההודעה כדי לפנות אליו"}
+                    placeholder={tab === "role" ? "לחבילה…" : "כתבו שם בתחילת ההודעה כדי לפנות אליו"}
                     value={text}
                     maxLength={240}
                     onChange={(e) => setText(e.target.value)}
@@ -442,7 +462,7 @@ export default function LiveGame({ code }: { code: string }) {
               </div>
             ) : (
               <div className="border-t border-white/10 px-3 py-3 text-center text-xs text-dust">
-                {view.me.alive ? "הצ'אט סגור עכשיו" : "רק קריאה"}
+                {view.me.alive ? (tab === "role" ? "הערוץ ייפתח כשיגיע שלב התפקיד שלך" : "כיכר הכפר סגורה עכשיו") : "רק קריאה"}
               </div>
             )}
           </div>
@@ -536,10 +556,11 @@ export default function LiveGame({ code }: { code: string }) {
       {err && <div className="px-4 pb-2 text-center text-sm text-red-300">{err}</div>}
 
       <nav className="sticky bottom-0 z-20 border-t border-white/10 bg-black/70 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
-        <div className="mx-auto grid max-w-lg grid-cols-3">
+        <div className="mx-auto grid max-w-lg grid-cols-4">
           {(
             [
-              ["chat", "צ'אט"],
+              ["village", "כפר"],
+              ["role", roleChannel ? "תפקיד •" : "תפקיד"],
               ["people", "שחקנים"],
               ["me", "אני"],
             ] as const
@@ -571,7 +592,9 @@ function MePane({ view }: { view: LiveView }) {
             {role ? ROLE_HE[role] : "עוד אין תפקיד"}
             {!view.me.alive ? " · מת" : ""}
           </div>
-          <div className="mt-1 text-xs text-dust">השם שלך (רק אתה): {view.me.realName}</div>
+          <div className="mt-1 text-xs text-dust">
+            {view.rules.identityMode === "aliases" ? `השם האמיתי שלך (רק אתה): ${view.me.realName}` : "זה השם שמוצג בכפר"}
+          </div>
         </div>
       </div>
       <div className="rounded-2xl bg-white/5 p-4 text-[15px] leading-relaxed">{nightReminder(role)}</div>
@@ -599,6 +622,16 @@ function MePane({ view }: { view: LiveView }) {
           <div className="space-y-1 text-sm text-dust">
             {view.deaths.map((d, i) => (
               <div key={`${d.name}-${i}`}>{d.text}</div>
+            ))}
+          </div>
+        </div>
+      )}
+      {view.directorEvents.length > 0 && (
+        <div className="rounded-2xl border border-ember/20 bg-ember/10 p-4">
+          <div className="mb-2 font-extrabold">מה הבמאי עשה</div>
+          <div className="space-y-2 text-sm text-dust">
+            {view.directorEvents.map((event) => (
+              <div key={event.id}><span className="font-bold text-paper">{event.title}:</span> {event.text}</div>
             ))}
           </div>
         </div>

@@ -6,6 +6,7 @@ import type {
   Phase,
   Player,
   Role,
+  Speed,
 } from "./types";
 import { DEFAULT_CONFIG, ROLE_HE } from "./types";
 import { pickNames, shuffle } from "./names";
@@ -175,30 +176,45 @@ function maybeEvent(state: GameState) {
   if (!alive.length) return;
   const victim = pick(alive, rnd);
   const roll = rnd();
-  if (roll < 0.34) {
+  if (roll < 0.24) {
     victim.muted = true;
-    const text = `${victim.name} נסתם. לא כותב היום.`;
+    const text = `✦ הבמאי: ${victim.name} קיבל איום. הוא לא כותב היום.`;
     narrator(state, text);
     logEvent(state, text);
-  } else if (roll < 0.67) {
+  } else if (roll < 0.48) {
     victim.cannotVote = true;
-    const text = `${victim.name} בלי הצבעה היום.`;
+    const text = `✦ הבמאי: הפתק של ${victim.name} נקרע. אין לו הצבעה היום.`;
     narrator(state, text);
     logEvent(state, text);
-  } else {
+  } else if (roll < 0.7) {
     const wolfLine = [...state.messages]
       .reverse()
       .find((m) => m.channel === "wolves" && m.authorId);
     if (wolfLine) {
-      const text = `מישהו שמע בלילה, בלי שם: «${wolfLine.text}»`;
+      const text = `✦ הבמאי הדליף לחישה, בלי שם: «${wolfLine.text}»`;
       narrator(state, text);
       logEvent(state, "דליפה מערוץ הזאבים (בלי שם)");
     } else {
       victim.muted = true;
-      const text = `${victim.name} נסתם. לא כותב היום.`;
+      const text = `✦ הבמאי: ${victim.name} לא יכול לדבר היום.`;
       narrator(state, text);
       logEvent(state, text);
     }
+  } else if (roll < 0.9) {
+    const wolf = pick(alive.filter((player) => player.role === "wolf"), rnd);
+    const town = pick(alive.filter((player) => player.role !== "wolf"), rnd);
+    if (!wolf || !town) return;
+    const pair = shuffle([wolf.name, town.name], rnd);
+    const text = `✦ רמז מהבמאי: אחד מבין ${pair[0]} ו${pair[1]} הוא זאב.`;
+    narrator(state, text);
+    logEvent(state, text);
+  } else {
+    const wolves = alive.filter((player) => player.role === "wolf");
+    const town = alive.filter((player) => player.role !== "wolf");
+    if (town.length < wolves.length + 3) return;
+    const extra = pick(town, rnd);
+    narrator(state, "✦ ירח דם. הלילה גובה מחיר נוסף.");
+    killPlayer(state, extra.id, "נעלם תחת הירח האדום");
   }
 }
 
@@ -371,6 +387,7 @@ function finishNight(state: GameState) {
 
   if (checkWin(state)) return;
   maybeEvent(state);
+  checkWin(state);
 }
 
 function resolveCurrent(state: GameState) {
@@ -446,7 +463,7 @@ export function idleState(config: GameConfig = DEFAULT_CONFIG): GameState {
   };
 }
 
-export function startGame(config: GameConfig, speed: 1 | 2 | 4 = 1): GameState {
+export function startGame(config: GameConfig, speed: Speed = 1): GameState {
   const now = Date.now();
   const names = pickNames(8, rnd);
   const roles = shuffle(DECK_ROLES, rnd);
@@ -540,7 +557,7 @@ export async function tick(state: GameState, now = Date.now()): Promise<GameStat
 export async function applyControl(
   state: GameState,
   action: string,
-  extra?: { speed?: 1 | 2 | 4; config?: Partial<GameConfig> },
+  extra?: { speed?: Speed; config?: Partial<GameConfig> },
 ): Promise<GameState> {
   const now = Date.now();
   if (action === "pause" && state.status === "running") {

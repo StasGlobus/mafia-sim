@@ -307,6 +307,7 @@ export default function AdminGame({ code }: { code: string }) {
   const left = view.nextLockAt ? Math.max(0, new Date(view.nextLockAt).getTime() - now) : 0;
   const lobby = view.status === "lobby";
   const running = view.status === "running";
+  const humansOnlyNeedsMore = view.rules.botMode === "humans_only" && view.humansJoined < view.rules.seats;
 
   return (
     <div className="flex min-h-dvh flex-col bg-night text-paper">
@@ -347,6 +348,7 @@ export default function AdminGame({ code }: { code: string }) {
         <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${tab === "manage" ? "block" : "hidden"}`}>
           {lobby ? (
             <form onSubmit={(e) => void updateSchedule(e)} className="space-y-4">
+              <RulesCard view={view} />
               <div className="rounded-3xl bg-white/5 p-4">
                 <div className="font-extrabold">שעות וימים</div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
@@ -398,14 +400,15 @@ export default function AdminGame({ code }: { code: string }) {
               <button
                 type="button"
                 onClick={() => void start()}
-                disabled={busy}
+                disabled={busy || humansOnlyNeedsMore}
                 className="min-h-14 w-full rounded-2xl bg-paper text-lg font-extrabold text-ink disabled:opacity-40"
               >
-                מלא בבוטים והתחל
+                {view.rules.botMode === "fill" ? "השלם בבוטים והתחל" : humansOnlyNeedsMore ? `מחכים לעוד ${view.rules.seats - view.humansJoined}` : "התחל עם השחקנים"}
               </button>
             </form>
           ) : (
             <div className="space-y-3">
+              <RulesCard view={view} />
               <div className="rounded-3xl bg-white/5 p-4">
                 <div className="font-extrabold">לוח זמנים</div>
                 <p className="mt-2 text-sm text-dust">
@@ -525,6 +528,24 @@ function CopyRow({
   );
 }
 
+function RulesCard({ view }: { view: AdminView }) {
+  const style = view.rules.directorStyle === "classic" ? "קלאסי" : view.rules.directorStyle === "wild" ? "פרוע" : "דינמי";
+  return (
+    <div className="rounded-3xl border border-ember/20 bg-ember/10 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="font-extrabold">חוקי השולחן</div>
+        <span className="rounded-full bg-black/20 px-2.5 py-1 text-xs font-bold">במאי AI · {style}</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-dust">
+        <div>{view.rules.seats} מקומות · {view.rules.wolfCount} זאבים</div>
+        <div>{view.rules.identityMode === "real" ? "שמות אמיתיים" : "שמות בדויים"}</div>
+        <div>{view.rules.botMode === "fill" ? "AI משלים מקומות" : "אנשים בלבד"}</div>
+        <div>{[view.rules.hasSeer && "רואה", view.rules.hasDoctor && "רופא"].filter(Boolean).join(" · ") || "ללא תפקידי כוח"}</div>
+      </div>
+    </div>
+  );
+}
+
 function SecretsPane({ view }: { view: AdminView }) {
   return (
     <div className="space-y-3 pb-6">
@@ -540,6 +561,19 @@ function SecretsPane({ view }: { view: AdminView }) {
       <MsgBlock title="רואה" msgs={view.seerMsgs} />
       <MsgBlock title="רופא" msgs={view.doctorMsgs} />
       <MsgBlock title="הצ'אט" msgs={view.messages} />
+      {view.directorEvents.length > 0 && (
+        <div className="rounded-2xl border border-ember/20 bg-ember/10 p-4">
+          <div className="mb-2 font-extrabold">החלטות הבמאי</div>
+          <div className="space-y-3 text-sm">
+            {view.directorEvents.map((event) => (
+              <div key={event.id}>
+                <div className="font-bold">{event.title} · יום {event.dayNumber}</div>
+                <div className="mt-0.5 text-dust">{event.text}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {view.deaths.length > 0 && (
         <div className="rounded-2xl bg-white/5 p-4">
           <div className="mb-2 font-extrabold">מי מת</div>

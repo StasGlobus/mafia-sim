@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { WEEKDAY_CHIPS } from "@/lib/types";
+import { ROOM_CODE_LENGTH, WEEKDAY_CHIPS, type BotMode, type DirectorStyle, type IdentityMode } from "@/lib/types";
 
 function saveMe(code: string, me: { playerId: string; secret: string; fakeName: string }) {
   try {
@@ -15,7 +15,7 @@ function saveMe(code: string, me: { playerId: string; secret: string; fakeName: 
 }
 
 function cleanRoomCode(value: string) {
-  return value.replace(/[\s-]/g, "").slice(0, 4);
+  return value.replace(/[\s-]/g, "").toUpperCase().slice(0, ROOM_CODE_LENGTH);
 }
 
 export default function AdminHomePage() {
@@ -25,6 +25,13 @@ export default function AdminHomePage() {
   const [dayStart, setDayStart] = useState("10:00");
   const [dayEnd, setDayEnd] = useState("22:00");
   const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [seats, setSeats] = useState(8);
+  const [wolfCount, setWolfCount] = useState(2);
+  const [hasSeer, setHasSeer] = useState(true);
+  const [hasDoctor, setHasDoctor] = useState(true);
+  const [identityMode, setIdentityMode] = useState<IdentityMode>("aliases");
+  const [botMode, setBotMode] = useState<BotMode>("fill");
+  const [directorStyle, setDirectorStyle] = useState<DirectorStyle>("dynamic");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -52,7 +59,14 @@ export default function AdminHomePage() {
       const res = await fetch("/api/live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", realName: realName.trim(), dayStart, dayEnd, days }),
+        body: JSON.stringify({
+          action: "create",
+          realName: realName.trim(),
+          dayStart,
+          dayEnd,
+          days,
+          rules: { seats, wolfCount, hasSeer, hasDoctor, identityMode, botMode, directorStyle },
+        }),
       });
       const data = (await res.json()) as {
         error?: string;
@@ -71,7 +85,7 @@ export default function AdminHomePage() {
 
   function openExisting(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (code.length === 4) router.push(`/admin/${code}`);
+    if (code.length === ROOM_CODE_LENGTH) router.push(`/admin/${code}`);
   }
 
   return (
@@ -98,7 +112,7 @@ export default function AdminHomePage() {
             <p className="text-sm font-black text-ember">ניהול משחק</p>
             <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">אתם פותחים.<br />הכפר מתעורר.</h1>
             <p className="mt-5 text-lg leading-8 text-paper/60">
-              הגדירו את שעות המשחק, שלחו קוד לחברים והתחילו מתי שמתאים. כל המקומות הפנויים יתמלאו בבוטים.
+              אתם קובעים את ההרכב, הזהויות וקצב הכאוס. במאי AI מנהל את הלילה ושומר שכל משחק יתפתח אחרת.
             </p>
 
             <form onSubmit={openExisting} className="mt-8 rounded-2xl border border-white/10 bg-white/[.04] p-4">
@@ -107,15 +121,15 @@ export default function AdminHomePage() {
                 <input
                   id="existing-code"
                   className="min-h-12 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/25 px-3 text-center font-mono text-lg font-black tracking-[.25em] text-paper placeholder:text-paper/20 focus:border-ember/70 focus:outline-none"
-                  placeholder="אבג7"
+                  placeholder="N7GHT2"
                   value={code}
                   onChange={(event) => setCode(cleanRoomCode(event.target.value))}
                   autoCapitalize="characters"
                   autoCorrect="off"
                   spellCheck={false}
-                  maxLength={4}
+                  maxLength={ROOM_CODE_LENGTH}
                 />
-                <button type="submit" disabled={code.length !== 4} className="rounded-xl bg-white/10 px-5 font-black transition hover:bg-white/15 disabled:opacity-30">פתיחה</button>
+                <button type="submit" disabled={code.length !== ROOM_CODE_LENGTH} className="rounded-xl bg-white/10 px-5 font-black transition hover:bg-white/15 disabled:opacity-30">פתיחה</button>
               </div>
             </form>
           </section>
@@ -143,6 +157,67 @@ export default function AdminHomePage() {
                   required
                 />
               </label>
+
+              <fieldset>
+                <legend className="text-sm font-bold text-paper/75">הרכב הכפר</legend>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <label className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                    <span className="text-paper/50">שחקנים</span>
+                    <select
+                      value={seats}
+                      onChange={(event) => {
+                        const next = Number(event.target.value);
+                        setSeats(next);
+                        setWolfCount((current) => Math.min(current, Math.floor((next - 1) / 2)));
+                      }}
+                      className="mt-2 min-h-11 w-full rounded-xl bg-white/10 px-3 font-black text-paper"
+                    >
+                      {Array.from({ length: 8 }, (_, index) => index + 5).map((count) => <option key={count} value={count}>{count}</option>)}
+                    </select>
+                  </label>
+                  <label className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                    <span className="text-paper/50">זאבים</span>
+                    <select value={wolfCount} onChange={(event) => setWolfCount(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded-xl bg-white/10 px-3 font-black text-paper">
+                      {Array.from({ length: Math.floor((seats - 1) / 2) }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <ToggleButton active={hasSeer} onClick={() => setHasSeer((value) => !value)} label="רואה" detail="בודק תפקיד בלילה" />
+                  <ToggleButton active={hasDoctor} onClick={() => setHasDoctor((value) => !value)} label="רופא" detail="מציל קורבן בלילה" />
+                </div>
+              </fieldset>
+
+              <ChoiceGroup
+                title="זהויות"
+                value={identityMode}
+                onChange={(value) => setIdentityMode(value as IdentityMode)}
+                options={[
+                  ["aliases", "שמות בדויים", "כולם נכנסים לדמות"],
+                  ["real", "שמות אמיתיים", "יודעים מי סביב השולחן"],
+                ]}
+              />
+
+              <ChoiceGroup
+                title="מי משחק?"
+                value={botMode}
+                onChange={(value) => setBotMode(value as BotMode)}
+                options={[
+                  ["fill", "חברים + AI", "הבוטים משלימים מקומות"],
+                  ["humans_only", "אנשים בלבד", "מתחילים כשהשולחן מלא"],
+                ]}
+              />
+
+              <ChoiceGroup
+                title="סגנון הבמאי"
+                value={directorStyle}
+                onChange={(value) => setDirectorStyle(value as DirectorStyle)}
+                options={[
+                  ["classic", "קלאסי", "בלי הפתעות מכניות"],
+                  ["dynamic", "דינמי", "רמזים ושיבושים מאוזנים"],
+                  ["wild", "פרוע", "גם לילות עם קורבן נוסף"],
+                ]}
+              />
 
               <fieldset>
                 <legend className="text-sm font-bold text-paper/75">מתי הכפר פתוח?</legend>
@@ -190,5 +265,30 @@ export default function AdminHomePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function ToggleButton({ active, onClick, label, detail }: { active: boolean; onClick: () => void; label: string; detail: string }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active} className={`rounded-2xl border p-3 text-right transition ${active ? "border-ember/60 bg-ember/15" : "border-white/10 bg-white/[.03] opacity-55"}`}>
+      <span className="block font-black">{active ? "✓ " : ""}{label}</span>
+      <span className="mt-1 block text-xs text-paper/45">{detail}</span>
+    </button>
+  );
+}
+
+function ChoiceGroup({ title, value, onChange, options }: { title: string; value: string; onChange: (value: string) => void; options: [string, string, string][] }) {
+  return (
+    <fieldset>
+      <legend className="text-sm font-bold text-paper/75">{title}</legend>
+      <div className={`mt-3 grid gap-2 ${options.length === 3 ? "sm:grid-cols-3" : "grid-cols-2"}`}>
+        {options.map(([id, label, detail]) => (
+          <button key={id} type="button" onClick={() => onChange(id)} aria-pressed={value === id} className={`rounded-2xl border p-3 text-right transition ${value === id ? "border-paper/50 bg-paper/10" : "border-white/10 bg-white/[.03] text-paper/55"}`}>
+            <span className="block text-sm font-black">{label}</span>
+            <span className="mt-1 block text-[11px] leading-4 text-paper/40">{detail}</span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 }

@@ -1,11 +1,18 @@
 import crypto from "crypto";
-import type { AdminView, LiveGame, LiveSchedule, LiveView, Personality, Player, Role } from "./types";
-import { DEFAULT_CONFIG, DEFAULT_SCHEDULE, LIVE_SEATS, ROLE_HE } from "./types";
+import type { AdminView, DirectorEvent, LiveGame, LiveRules, LiveSchedule, LiveView, Personality, Player, Role } from "./types";
+import {
+  DEFAULT_CONFIG,
+  DEFAULT_LIVE_RULES,
+  DEFAULT_SCHEDULE,
+  MAX_LIVE_SEATS,
+  MIN_LIVE_SEATS,
+  ROOM_CODE_LENGTH,
+  ROLE_HE,
+} from "./types";
 import { pickNames, shuffle } from "./names";
 import { NAME_POOL } from "./names";
 import {
   ALL_PERSONALITIES,
-  DECK_ROLES,
   checkWin,
   majorityTarget,
   openFor,
@@ -26,11 +33,12 @@ import {
 } from "./agents";
 import { getLive, hasLive, setLive } from "./live-store";
 import { adminView, playerView, prettyJerusalem } from "./view";
+import { chooseDirectorEvent } from "./director";
 
 export { prettyJerusalem };
 
 const TZ = "Asia/Jerusalem";
-const CODE_ALPHABET = "אבגדהוזחטיכלמנסעפצקרשת23456789";
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const PULSE_EVERY_MS = 25_000;
 const MAX_WINDOW_STEPS = 8;
 const HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -49,10 +57,62 @@ function makeSecret() {
 
 function makeCode(): string {
   let c = "";
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < ROOM_CODE_LENGTH; i++) {
     c += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]!;
   }
   return c;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function rulesFor(game: LiveGame): LiveRules {
+  const raw = game.rules ?? DEFAULT_LIVE_RULES;
+  const seats = clamp(raw.seats ?? DEFAULT_LIVE_RULES.seats, MIN_LIVE_SEATS, MAX_LIVE_SEATS);
+  const wolfCount = clamp(raw.wolfCount ?? Math.max(1, Math.floor(seats / 4)), 1, Math.max(1, Math.floor((seats - 1) / 2)));
+  const rules: LiveRules = {
+    seats,
+    wolfCount,
+    hasSeer: raw.hasSeer ?? true,
+    hasDoctor: raw.hasDoctor ?? true,
+    identityMode: raw.identityMode === "real" ? "real" : "aliases",
+    botMode: raw.botMode === "humans_only" ? "humans_only" : "fill",
+    directorStyle: ["classic", "dynamic", "wild"].includes(raw.directorStyle) ? raw.directorStyle : "dynamic",
+  };
+  game.rules = rules;
+  game.directorEvents ??= [];
+  return rules;
+}
+
+function parseRules(input: Partial<LiveRules>): LiveRules {
+  const seats = clamp(Number(input.seats ?? DEFAULT_LIVE_RULES.seats), MIN_LIVE_SEATS, MAX_LIVE_SEATS);
+  return {
+    seats,
+    wolfCount: clamp(Number(input.wolfCount ?? Math.max(1, Math.floor(seats / 4))), 1, Math.max(1, Math.floor((seats - 1) / 2))),
+    hasSeer: input.hasSeer !== false,
+    hasDoctor: input.hasDoctor !== false,
+    identityMode: input.identityMode === "real" ? "real" : "aliases",
+    botMode: input.botMode === "humans_only" ? "humans_only" : "fill",
+    directorStyle: input.directorStyle === "classic" || input.directorStyle === "wild" ? input.directorStyle : "dynamic",
+  };
+}
+
+function roleDeck(count: number, rules: LiveRules): Role[] {
+  const wolves = clamp(rules.wolfCount, 1, Math.max(1, Math.floor((count - 1) / 2)));
+  const deck: Role[] = Array.from({ length: wolves }, () => "wolf" as const);
+  if (rules.hasSeer && deck.length < count) deck.push("seer");
+  if (rules.hasDoctor && deck.length < count) deck.push("doctor");
+  while (deck.length < count) deck.push("villager");
+  return deck;
+}
+
+function publicName(realName: string, rules: LiveRules, used: string[]) {
+  if (rules.identityMode === "aliases") return nextFakeName(used);
+  if (!used.includes(realName)) return realName;
+  let suffix = 2;
+  while (used.includes(`${realName} ${suffix}`)) suffix += 1;
+  return `${realName} ${suffix}`;
 }
 
 export function secretsEqual(a: string, b: string): boolean {
@@ -232,6 +292,68 @@ function liveKill(game: LiveGame, id: string, how: string, at: number) {
   game.eventLog.push(`יום ${game.dayNumber}: ${p.name} מת (${roleHe})`);
 }
 
+const DIRECTOR_TITLES: Record<DirectorEvent["type"], string> = {
+  omen: "רמז מהבמאי",
+  silence: "איום לילי",
+  lost_vote: "פתק קרוע",
+  leak: "לחישה שדלפה",
+  blood_moon: "ירח דם",
+};
+
+function randomOne<T>(items: T[]): T | null {
+  return items.length ? items[Math.floor(Math.random() * items.length)]! : null;
+}
+
+async function applyDirectorEvent(game: LiveGame, at: number) {
+  const decision = await chooseDirectorEvent(game);
+  if (!decision) return;
+
+  const alive = living(game);
+  let text = decision.narration;
+
+  if (decision.type === "silence") {
+    const target = randomOne(alive);
+    if (!target) return;
+    target.muted = true;
+    text = `${text} ${target.name} לא יכול לדבר היום.`;
+  } else if (decision.type === "lost_vote") {
+    const target = randomOne(alive);
+    if (!target) return;
+    target.cannotVote = true;
+    text = `${text} הקול של ${target.name} לא ייספר היום.`;
+  } else if (decision.type === "leak") {
+    const whisper = [...game.messages]
+      .reverse()
+      .find((message) => message.channel === "wolves" && !message.narrator);
+    if (!whisper) return;
+    text = `${text} “${whisper.text.slice(0, 110)}”`;
+  } else if (decision.type === "omen") {
+    const wolf = randomOne(alive.filter((player) => player.role === "wolf"));
+    const town = randomOne(alive.filter((player) => player.role !== "wolf"));
+    if (!wolf || !town) return;
+    const pair = shuffle([wolf.name, town.name], rnd);
+    text = `${text} אחד מבין ${pair[0]} ו${pair[1]} הוא זאב.`;
+  } else if (decision.type === "blood_moon") {
+    const extraVictim = randomOne(alive.filter((player) => player.role !== "wolf"));
+    if (!extraVictim) return;
+    text = `${text} ${extraVictim.name} נעלם תחת הירח האדום.`;
+    liveKill(game, extraVictim.id, "נעלם תחת הירח האדום", at);
+  }
+
+  const event: DirectorEvent = {
+    id: uid("director"),
+    type: decision.type,
+    title: DIRECTOR_TITLES[decision.type],
+    text,
+    dayNumber: game.dayNumber + 1,
+    ts: at,
+  };
+  game.directorEvents.unshift(event);
+  game.directorEvents = game.directorEvents.slice(0, 20);
+  game.eventLog.push(`במאי: ${event.title}`);
+  announce(game, `✦ ${event.title}: ${text}`);
+}
+
 function applySeerLook(game: LiveGame, seer: Player, targetId: string) {
   const t = game.players.find((p) => p.id === targetId);
   if (!t) return;
@@ -363,7 +485,7 @@ function resolveLiveSeer(game: LiveGame, at: number) {
   enterNightStep(game, at, "night_doctor", 2);
 }
 
-function resolveLiveDoctor(game: LiveGame, at: number) {
+async function resolveLiveDoctor(game: LiveGame, at: number) {
   const doc = living(game).find((p) => p.role === "doctor");
   if (doc && !game.night.doctorTarget && doc.kind !== "human") {
     game.night.doctorTarget = pickDoctorSave(game, doc);
@@ -371,10 +493,10 @@ function resolveLiveDoctor(game: LiveGame, at: number) {
   if (doc && game.night.doctorTarget) {
     applyDoctorLog(game, doc, game.night.doctorTarget);
   }
-  finishNight(game, at);
+  await finishNight(game, at);
 }
 
-function finishNight(game: LiveGame, at: number) {
+async function finishNight(game: LiveGame, at: number) {
   const targetId = game.night.wolfTarget;
   const saved = Boolean(targetId && targetId === game.night.doctorTarget);
   const target = targetId ? game.players.find((p) => p.id === targetId) : null;
@@ -407,10 +529,16 @@ function finishNight(game: LiveGame, at: number) {
     game.openChannel = "none";
     return;
   }
+  await applyDirectorEvent(game, at);
+  if (checkWin(game)) {
+    game.nextLockAt = at;
+    game.openChannel = "none";
+    return;
+  }
   enterDay(game, at, game.dayNumber + 1);
 }
 
-function resolveLiveWindow(game: LiveGame, at: number) {
+async function resolveLiveWindow(game: LiveGame, at: number) {
   switch (game.phase) {
     case "wait":
       enterDay(game, at, game.dayNumber === 0 ? 1 : game.dayNumber);
@@ -425,7 +553,7 @@ function resolveLiveWindow(game: LiveGame, at: number) {
       resolveLiveSeer(game, at);
       break;
     case "night_doctor":
-      resolveLiveDoctor(game, at);
+      await resolveLiveDoctor(game, at);
       break;
     default:
       game.nextLockAt = at + 86_400_000;
@@ -461,7 +589,7 @@ export async function catchUp(game: LiveGame, now = Date.now()): Promise<LiveGam
   while (game.status === "running" && now >= game.nextLockAt && guard < MAX_WINDOW_STEPS) {
     guard += 1;
     const lockAt = game.nextLockAt;
-    resolveLiveWindow(game, lockAt);
+    await resolveLiveWindow(game, lockAt);
     if (game.status !== "running") break;
   }
   setElapsed(game, now);
@@ -489,8 +617,8 @@ function cleanName(raw: unknown): string | null {
 
 function cleanCode(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
-  const t = raw.trim();
-  if (t.length < 3 || t.length > 8) return null;
+  const t = raw.replace(/[\s-]/g, "").toUpperCase();
+  if (t.length !== ROOM_CODE_LENGTH || [...t].some((character) => !CODE_ALPHABET.includes(character))) return null;
   return t;
 }
 
@@ -515,13 +643,15 @@ export function parseSchedule(body: {
   return { timezone: "Asia/Jerusalem", days, dayStart, dayEnd };
 }
 
-function emptyLive(code: string, host: Player, secret: string, schedule: LiveSchedule): LiveGame {
+function emptyLive(code: string, host: Player, secret: string, schedule: LiveSchedule, rules: LiveRules): LiveGame {
   const now = Date.now();
   return {
     id: uid("lg"),
     code,
     hostId: host.id,
     schedule,
+    rules,
+    directorEvents: [],
     startedAt: null,
     secrets: { [host.id]: secret },
     deaths: [],
@@ -573,11 +703,13 @@ export function createLiveGame(input: {
   dayStart?: string;
   dayEnd?: string;
   days?: number[];
+  rules?: Partial<LiveRules>;
 }): ActionResult {
   const realName = cleanName(input.realName);
   if (!realName) return { ok: false, error: "צריך שם", status: 400 };
   const schedule = parseSchedule(input);
   if ("error" in schedule) return { ok: false, error: schedule.error, status: 400 };
+  const rules = parseRules(input.rules ?? {});
 
   let code = makeCode();
   let guard = 0;
@@ -588,7 +720,7 @@ export function createLiveGame(input: {
   const secret = makeSecret();
   const host: Player = {
     id: uid("h"),
-    name: nextFakeName([]),
+    name: publicName(realName, rules, []),
     role: "villager",
     personality: "naive",
     alive: true,
@@ -598,7 +730,7 @@ export function createLiveGame(input: {
     realName,
     host: true,
   };
-  const game = emptyLive(code, host, secret, schedule);
+  const game = emptyLive(code, host, secret, schedule, rules);
   setLive(game);
   return viewOf(game, host, Date.now(), { playerId: host.id, secret, fakeName: host.name });
 }
@@ -617,8 +749,9 @@ export function joinLiveGame(input: { code: string; realName: string; secret?: s
   if (game.phase !== "lobby" || game.status !== "idle") {
     return { ok: false, error: "המשחק כבר רץ", status: 400 };
   }
+  const rules = rulesFor(game);
   const humans = game.players.filter((p) => p.kind === "human");
-  if (humans.length >= LIVE_SEATS) {
+  if (humans.length >= rules.seats) {
     return { ok: false, error: "מלא", status: 400 };
   }
   const realName = cleanName(input.realName);
@@ -628,7 +761,7 @@ export function joinLiveGame(input: { code: string; realName: string; secret?: s
   const used = game.players.map((p) => p.name);
   const player: Player = {
     id: uid("h"),
-    name: nextFakeName(used),
+    name: publicName(realName, rules, used),
     role: "villager",
     personality: "naive",
     alive: true,
@@ -645,17 +778,22 @@ export function joinLiveGame(input: { code: string; realName: string; secret?: s
 }
 
 export async function startLiveGame(input: { code: string; secret: string }): Promise<ActionResult> {
-  const game = getLive(input.code.trim());
+  const code = cleanCode(input.code);
+  const game = code ? getLive(code) : null;
   if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
   const me = findPlayerBySecret(game, input.secret);
   if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
   if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
   if (game.phase !== "lobby") return { ok: false, error: "כבר התחיל", status: 400 };
   const humans = game.players.filter((p) => p.kind === "human");
-  if (humans.length < 1) return { ok: false, error: "צריך לפחות אחד", status: 400 };
+  const rules = rulesFor(game);
+  if (rules.botMode === "humans_only" && humans.length < rules.seats) {
+    return { ok: false, error: `במצב ללא בוטים מחכים לכל ${rules.seats} השחקנים`, status: 400 };
+  }
 
   const now = Date.now();
-  const need = LIVE_SEATS - game.players.length;
+  const targetCount = rules.botMode === "fill" ? rules.seats : humans.length;
+  const need = Math.max(0, targetCount - game.players.length);
   const usedNames = game.players.map((p) => p.name);
   const agentNames = pickNames(Math.max(need, 0), rnd).filter((n) => !usedNames.includes(n));
   const extra = NAME_POOL.filter((n) => !usedNames.includes(n) && !agentNames.includes(n));
@@ -677,7 +815,7 @@ export async function startLiveGame(input: { code: string; secret: string }): Pr
     game.players.push(agent);
   }
 
-  const roles = shuffle([...DECK_ROLES], rnd) as Role[];
+  const roles = shuffle(roleDeck(game.players.length, rules), rnd) as Role[];
   const pers = shuffle([...ALL_PERSONALITIES], rnd);
   game.players.forEach((p, i) => {
     p.role = roles[i] ?? "villager";
@@ -703,7 +841,7 @@ export async function startLiveGame(input: { code: string; secret: string }): Pr
   game.lastAgentPulseAt = now;
   setElapsed(game, now);
 
-  announce(game, "שמונה שמות. מי הזאב.");
+  announce(game, `${game.players.length} שמות. ${rules.wolfCount} זאבים. הבמאי צופה.`);
   if (win.phase === "day") {
     announce(game, "יום. מדברים, אחר כך מצביעים.");
   } else {

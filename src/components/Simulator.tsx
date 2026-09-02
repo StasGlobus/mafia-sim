@@ -138,8 +138,8 @@ export default function Simulator() {
   const tally = state ? voteTally(state) : [];
   const left = state ? remainingWallMs(state) : 0;
 
-  async function start() {
-    const data = await api("start", { config, speed: state?.speed ?? 1 });
+  async function start(speedOverride?: Speed) {
+    const data = await api("start", { config, speed: speedOverride ?? state?.speed ?? 1 });
     setState(data);
     setTab("chat");
     setMenu(false);
@@ -199,7 +199,7 @@ export default function Simulator() {
       )}
 
       {empty ? (
-        <EmptyStart config={config} setConfig={setConfig} onStart={start} err={err} onHow={() => setHow(true)} />
+        <EmptyStart config={config} setConfig={setConfig} onStart={() => void start()} onFastStart={() => void start(16)} err={err} onHow={() => setHow(true)} />
       ) : (
         <>
           {menu && (
@@ -208,7 +208,7 @@ export default function Simulator() {
               config={config}
               setConfig={setConfig}
               setState={setState}
-              onStart={start}
+              onStart={() => void start()}
               onClose={() => setMenu(false)}
             />
           )}
@@ -261,12 +261,14 @@ function EmptyStart({
   config,
   setConfig,
   onStart,
+  onFastStart,
   err,
   onHow,
 }: {
   config: GameConfig;
   setConfig: (c: GameConfig) => void;
   onStart: () => void;
+  onFastStart: () => void;
   err: string | null;
   onHow: () => void;
 }) {
@@ -286,6 +288,12 @@ function EmptyStart({
           className="min-h-14 w-full rounded-2xl bg-paper text-xl font-extrabold text-ink active:opacity-80"
         >
           יאללה, משחק
+        </button>
+        <button
+          onClick={onFastStart}
+          className="min-h-12 w-full rounded-2xl border border-ember/30 bg-ember/10 text-sm font-black text-red-100"
+        >
+          מצב פיתוח · סימולציה מהירה 16×
         </button>
         <div className="grid grid-cols-2 gap-2">
           <button onClick={onHow} className="min-h-12 rounded-2xl bg-white/10 text-sm font-bold">
@@ -374,8 +382,8 @@ function MenuSheet({
             המשך
           </button>
         )}
-        <div className="grid grid-cols-3 gap-2">
-          {([1, 2, 4] as Speed[]).map((sp) => (
+        <div className="grid grid-cols-4 gap-2">
+          {([1, 4, 8, 16] as Speed[]).map((sp) => (
             <button
               key={sp}
               className={`min-h-12 rounded-2xl font-bold ${state.speed === sp ? "bg-paper text-ink" : "bg-white/10"}`}

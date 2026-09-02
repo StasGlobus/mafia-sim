@@ -12,6 +12,7 @@ import {
   type ActionResult,
 } from "@/lib/live";
 import { getLive } from "@/lib/live-store";
+import type { LiveRules } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,7 +69,7 @@ function secretFrom(req: NextRequest, body: { code?: string; secret?: string }, 
 }
 
 export async function GET(req: NextRequest) {
-  const code = (req.nextUrl.searchParams.get("code") ?? "").trim();
+  const code = (req.nextUrl.searchParams.get("code") ?? "").trim().toUpperCase();
   if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
   const secret = secretFrom(req, { code }, code);
   const asAdmin = req.nextUrl.searchParams.get("asAdmin") === "true";
@@ -80,7 +81,8 @@ export async function GET(req: NextRequest) {
       status: game.status === "idle" ? "lobby" : game.status === "ended" ? "ended" : "running",
       phase: game.phase,
       humansJoined: game.players.filter((p) => p.kind === "human").length,
-      seats: 8,
+      seats: game.rules?.seats ?? 8,
+      rules: game.rules,
       code: game.code,
     });
   }
@@ -107,11 +109,12 @@ export async function POST(req: NextRequest) {
       dayStart: typeof body.dayStart === "string" ? body.dayStart : undefined,
       dayEnd: typeof body.dayEnd === "string" ? body.dayEnd : undefined,
       days: Array.isArray(body.days) ? (body.days as number[]) : undefined,
+      rules: typeof body.rules === "object" && body.rules ? body.rules as Partial<LiveRules> : undefined,
     });
     return reply(req, result);
   }
 
-  const code = typeof body.code === "string" ? body.code.trim() : "";
+  const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
 
   if (action === "join") {
     const cookieSecret = code ? readAuth(req)[code]?.secret : undefined;
