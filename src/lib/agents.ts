@@ -408,7 +408,7 @@ export async function dayPulse(state: GameState) {
           r: state.lastKill?.role ? roleWord(state.lastKill.role) : "?",
         };
         const llm = await generateAgentLine({ state, me, channel: "public" });
-        const text = llm ?? lineFor(me.personality, kind, vars, rnd);
+        const text = llm ?? lineFor(me.personality, kind, vars, rnd, { speaker: me.gender, target: t?.gender });
         if (text && text !== m.lastText) {
           uniquePush(state, {
             channel: "public",
@@ -448,7 +448,10 @@ export async function dayPulse(state: GameState) {
       m.messagesToday < maxMessages(me.personality) &&
       rnd() < 0.45
     ) {
-      const text = lineFor(me.personality, "vote", { t: named, d: "", r: "" }, rnd);
+      const text = lineFor(me.personality, "vote", { t: named, d: "", r: "" }, rnd, {
+        speaker: me.gender,
+        target: state.players.find((p) => p.id === target)?.gender,
+      });
       uniquePush(state, {
         channel: "public",
         authorId: me.id,
@@ -503,7 +506,8 @@ export async function wolfPulse(state: GameState) {
   if (w && progress > 0.12 && rnd() < 0.55) {
     const m = mem(state, w.id);
     const llm = await generateAgentLine({ state, me: w, channel: "wolves" });
-    const text = llm ?? fill(pick(PHRASES.WOLF_NIGHT, rnd), { t: tName });
+    const target = state.players.find((p) => p.id === targetId);
+    const text = llm ?? fill(pick(PHRASES.WOLF_NIGHT, rnd), { t: tName }, { speaker: w.gender, target: target?.gender });
     if (text && text !== m.lastText) {
       uniquePush(state, {
         channel: "wolves",

@@ -741,42 +741,57 @@ async function mutate(code: string, fn: (game: LiveGame, now: number) => Promise
   }
 }
 
-/** Load a game for reading, advancing it first when nobody else is doing so. */
+/**
+ * Load a game for reading. Reads never run the agent engine inline: the
+ * response goes out at once and `advanceLiveGame` runs afterwards, so the
+ * client sees new lines on its next poll instead of waiting for the model.
+ */
 async function loadForRead(code: string, secret: string): Promise<{ game: LiveGame; me: Player; now: number } | ActionResult> {
-  let game = await getLive(code);
+  const game = await getLive(code);
   if (!game) return NOT_FOUND;
-  let me = findPlayerBySecret(game, secret);
+  const me = findPlayerBySecret(game, secret);
   if (!me) return UNAUTHORIZED;
-  const now = Date.now();
-  if (game.status === "running") {
-    const leased = await tryLeaseLive(game.code, LEASE_MS, now);
-    if (leased) {
-      const before = JSON.stringify(game);
-      let saved = false;
-      try {
-        await catchUp(game, now, makeBudget({ maxLlm: 3 }));
-        if (JSON.stringify(game) !== before) {
-          await setLive(game);
-          saved = true;
-        }
-      } catch (error) {
-        if (!(error instanceof LiveStoreConflictError)) throw error;
-        const fresh = await getLive(code);
-        if (fresh) {
-          game = fresh;
-          me = findPlayerBySecret(fresh, secret) ?? me;
-        }
-      } finally {
-        if (!saved) await releaseLeaseLive(game.code);
-      }
-    }
-  }
-  return { game, me, now };
+  return { game, me, now: Date.now() };
 }
 
+/**
+ * Background pass: bring one game up to date and persist it. Called after a
+ * response has been sent (route handlers) and by the cron. The lease makes
+ * sure only one pass runs per game at a time; the version check protects the
+ * data if two still overlap.
+ */
+export async function advanceLiveGame(code: string, budget: TickBudget = makeBudget({ maxLlm: 4, deadlineMs: 12_000 })): Promise<void> {
+  const clean = cleanCode(code);
+  if (!clean) return;
+  const now = Date.now();
+  const leased = await tryLeaseLive(clean, LEASE_MS, now);
+  if (!leased) return;
+  let saved = false;
+  try {
+    const game = await getLive(clean);
+    if (!game || game.status !== "running") return;
+    const before = JSON.stringify(game);
+    await catchUp(game, now, budget);
+    if (JSON.stringify(game) !== before) {
+      await setLive(game);
+      saved = true;
+    }
+  } catch (error) {
+    if (!(error instanceof LiveStoreConflictError)) console.error("advanceLiveGame failed", error);
+  } finally {
+    if (!saved) await releaseLeaseLive(clean);
+  }
+}
+
+/**
+ * Before a player acts, close any window whose time has passed and replay due
+ * agent actions with canned lines only, so the action is judged against the
+ * real phase without waiting on the model. Model-quality lines for anything
+ * still pending come from the background pass right after the response.
+ */
 async function advanceForWrite(game: LiveGame, now: number): Promise<ActionResult | null> {
   if (game.status !== "running") return null;
-  await catchUp(game, now, makeBudget({ maxLlm: 1, maxEvents: 12 }));
+  await catchUp(game, now, makeBudget({ maxLlm: 0, maxEvents: 60, deadlineMs: 6_000 }));
   if (game.status === "running" && now >= game.nextLockAt) {
     return { ok: false, error: "המשחק מתעדכן, נסה שוב בעוד רגע", status: 409 };
   }
@@ -932,7 +947,7 @@ export async function startLiveGame(input: { code: string; secret: string }): Pr
       announce(game, `הכפר סגור עכשיו. היום הראשון נפתח ב${prettyJerusalem(win.nextLockAt)}.`, now);
     }
 
-    await catchUp(game, now, makeBudget({ maxLlm: 2 }));
+    await catchUp(game, now, makeBudget({ maxLlm: 0 }));
     return viewOf(game, me, now);
   });
 }

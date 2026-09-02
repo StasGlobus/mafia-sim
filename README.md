@@ -46,9 +46,14 @@ after an hour sees a conversation that happened while they were away.
   indicator first. The system posts deadline reminders and reveals every role
   when the game ends.
 
-Agent speech uses `gpt-4.1-mini` through `OPENAI_API_KEY` or Vercel AI Gateway.
-Set `MAFIA_MODEL=gpt-4.1` for noticeably better Hebrew gender agreement. When no
-model is reachable, agents fall back to canned lines so a game never stalls.
+Agent speech uses `gpt-4.1` through `OPENAI_API_KEY` or Vercel AI Gateway
+(`MAFIA_MODEL=gpt-4.1-mini` cuts cost about five times at a real cost in Hebrew
+quality). When no model is reachable, agents fall back to canned lines, which
+carry gender tokens so a woman never says "אני חושב".
+
+Requests never wait for the model. A poll or an action returns the current
+state at once, and the agent engine runs right after the response (`after()`),
+so new lines show up on the next poll a second or two later.
 
 ## Local development
 
@@ -105,7 +110,8 @@ being close to the players. Change both together if you move the database.
 ## Keeping games alive when nobody is watching
 
 The engine advances on player requests. `GET /api/live/cron` advances every
-running game and is protected by `CRON_SECRET` (sent as a Bearer token).
+running game. With `CRON_SECRET` set it requires that Bearer token (Vercel
+sends it automatically); without it, only Vercel's own cron agent is accepted.
 `vercel.json` schedules it once a day, which is what Vercel's Hobby plan
 allows; on Pro you can raise the schedule to every few minutes, or point any
 external scheduler at the endpoint. Without it, games still catch up

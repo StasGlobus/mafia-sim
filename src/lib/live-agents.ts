@@ -212,14 +212,31 @@ interface Suspect {
   reason: string;
 }
 
-function topSuspect(game: LiveGame, me: Player, exclude: string[] = []): Suspect | null {
+/** Has this player written anything in the current day window? */
+function spokeToday(game: LiveGame, playerId: string): boolean {
+  return game.messages.some((m) => m.channel === "public" && !m.narrator && m.authorId === playerId && m.ts >= game.windowStartAt);
+}
+
+/**
+ * Early in the day, silence is not evidence. A human who is still reading must
+ * not become the default target of every bored agent.
+ */
+function quietGrace(game: LiveGame, at = Date.now()): boolean {
+  return game.phase === "day" && progressAt(game, at) < 0.4;
+}
+
+function topSuspect(game: LiveGame, me: Player, exclude: string[] = [], at = Date.now()): Suspect | null {
   const s = suspicionOf(game, me);
   const reasons = mem(game, me.id).reasons ?? {};
+  const grace = quietGrace(game, at);
   let best: Suspect | null = null;
   for (const p of others(game, me)) {
     if (exclude.includes(p.id) || isPack(me, p)) continue;
-    const score = (s[p.id] ?? 0) + rnd() * 0.3;
-    if (!best || score > best.score) best = { player: p, score, reason: reasons[p.id] ?? "" };
+    const base = s[p.id] ?? 0;
+    // Without real evidence, prefer people who have actually said something.
+    const penalty = grace && base < 0.8 && !spokeToday(game, p.id) ? -0.9 : 0;
+    const score = base + penalty + rnd() * 0.3;
+    if (!best || score > best.score) best = { player: p, score: base + rnd() * 0.3, reason: reasons[p.id] ?? "" };
   }
   return best;
 }
@@ -622,10 +639,14 @@ function factsFor(game: LiveGame, me: Player, at: number): string[] {
     } else {
       facts.push("עדיין אף אחד לא הצביע.");
     }
-    const top = topSuspect(game, me);
+    const top = topSuspect(game, me, [], at);
     if (top && top.score > 0.5) facts.push(`החשוד העיקרי שלך: ${top.player.name}${top.reason ? ` (${top.reason})` : ""}.`);
+    if (quietGrace(game, at)) {
+      const silent = others(game, me).filter((p) => !spokeToday(game, p.id)).map((p) => p.name);
+      if (silent.length) facts.push(`עוד לא כתבו היום: ${silent.join(", ")}. זה מוקדם, אנשים עוד לא הגיעו. שקט עכשיו הוא לא ראיה, אל תאשים בגלל זה.`);
+    }
     const seer = claimedSeer(game);
-    if (seer && seer.id !== me.id) facts.push(`${seer.name} טוען שהוא הרואה.`);
+    if (seer && seer.id !== me.id) facts.push(`${seer.name} ${seer.gender === "f" ? "טוענת שהיא" : "טוען שהוא"} הרואה.`);
   } else if (game.phase === "night_wolves") {
     const t = byId(game, game.night.wolfTarget);
     facts.push(t ? `היעד הנוכחי של החבילה: ${t.name}.` : "עוד לא נבחר יעד.");
@@ -657,8 +678,9 @@ async function say(game: LiveGame, me: Player, kind: SpeakKind, at: number, budg
       at,
     });
   }
-  if (!text) text = lineFor(me.personality, kind, vars, rnd);
-  if (text === m.lastText) text = lineFor(me.personality, kind, vars, rnd);
+  const genders = { speaker: me.gender, target: o.t?.gender };
+  if (!text) text = lineFor(me.personality, kind, vars, rnd, genders);
+  if (text === m.lastText) text = lineFor(me.personality, kind, vars, rnd, genders);
   if (!text) return null;
   const saved = uniquePush(game, {
     channel,
@@ -732,7 +754,7 @@ function planDayLine(game: LiveGame, me: Player, at: number): Plan {
   const lead = leadingTarget(game);
   const leadP = byId(game, lead);
   const votesOnMe = counts[me.id] ?? 0;
-  const top = topSuspect(game, me);
+  const top = topSuspect(game, me, [], at);
   const s = suspicionOf(game, me);
 
   if (!m.reactedToMorning && p < 0.35 && (game.lastKill || game.dayNumber > 1)) {
@@ -759,7 +781,9 @@ function planDayLine(game: LiveGame, me: Player, at: number): Plan {
   }
   if (me.personality === "anxious" && votesOnMe > 0 && rnd() < 0.3) return { kind: "panic" };
   const r = rnd();
-  const pool = others(game, me).filter((x) => !isPack(me, x));
+  const everyone = others(game, me).filter((x) => !isPack(me, x));
+  const talkers = quietGrace(game, at) ? everyone.filter((x) => spokeToday(game, x.id)) : everyone;
+  const pool = talkers.length ? talkers : everyone;
   const someone = top && top.score > 0.3 ? top.player : pool.length ? pool[Math.floor(rnd() * pool.length)]! : null;
   if (r < 0.3) return { kind: "question", t: someone };
   if (r < 0.6) return { kind: "small" };

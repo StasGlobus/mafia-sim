@@ -348,7 +348,7 @@ function resolveDoctor(state: GameState) {
       channel: "doctor",
       authorId: doc.id,
       authorName: doc.name,
-      text: fill(pick(PHRASES.DOCTOR_LOG, rnd), { t: t?.name ?? "?" }),
+      text: fill(pick(PHRASES.DOCTOR_LOG, rnd), { t: t?.name ?? "?" }, { speaker: doc.gender, target: t?.gender }),
       narrator: true,
     });
     logEvent(state, `רופא בחר להגן (פרטי)`);

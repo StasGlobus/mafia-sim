@@ -127,3 +127,25 @@ a:focus-visible {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
   30% { transform: translateY(-3px); opacity: 1; }
 }
+
+.phase-toast {
+  animation: toast-in 320ms cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-12px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+.role-reveal {
+  animation: reveal-in 600ms ease-out both;
+}
+.role-reveal img {
+  animation: reveal-zoom 6s ease-out both;
+}
+@keyframes reveal-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes reveal-zoom {
+  from { transform: scale(1.08); }
+  to { transform: scale(1); }
+}

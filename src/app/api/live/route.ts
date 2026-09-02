@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import {
+  advanceLiveGame,
   createLiveGame,
   joinLiveGame,
   liveAdminGet,
@@ -47,6 +48,16 @@ function withAuth(res: NextResponse, req: NextRequest, code: string, playerId: s
   return res;
 }
 
+/** Run the agent engine for this game once the response is on its way. */
+function advanceLater(code: string | undefined) {
+  if (!code) return;
+  try {
+    after(() => advanceLiveGame(code));
+  } catch {
+    // Outside a request scope (tests) there is nothing to defer to.
+  }
+}
+
 function reply(req: NextRequest, result: ActionResult, code?: string, secret?: string, playerId?: string) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
@@ -89,9 +100,11 @@ export async function GET(req: NextRequest) {
     }
     if (asAdmin) {
       const result = await liveAdminGet({ code, secret });
+      if (result.ok && result.game.status === "running") advanceLater(code);
       return reply(req, result, code, secret);
     }
     const result = await liveGet({ code, secret });
+    if (result.ok && result.game.status === "running") advanceLater(code);
     return reply(req, result, code, secret);
   } catch (error) {
     return storageError(error);
@@ -141,6 +154,7 @@ export async function POST(req: NextRequest) {
 
     if (action === "admin" || (action === "get" && asAdmin)) {
       const result = await liveAdminGet({ code, secret });
+      if (result.ok && result.game.status === "running") advanceLater(code);
       return reply(req, result, code, secret);
     }
     if (action === "setSchedule") {
@@ -155,6 +169,7 @@ export async function POST(req: NextRequest) {
     }
     if (action === "start") {
       const result = await startLiveGame({ code, secret });
+      if (result.ok) advanceLater(code);
       if (result.ok && asAdmin) {
         const admin = await liveAdminGet({ code, secret });
         return reply(req, admin, code, secret);
@@ -163,18 +178,22 @@ export async function POST(req: NextRequest) {
     }
     if (action === "say") {
       const result = await liveSay({ code, secret, text: String(body.text ?? "") });
+      if (result.ok) advanceLater(code);
       return reply(req, result, code, secret);
     }
     if (action === "vote") {
       const result = await liveVote({ code, secret, targetId: String(body.targetId ?? "") });
+      if (result.ok) advanceLater(code);
       return reply(req, result, code, secret);
     }
     if (action === "nightPick") {
       const result = await liveNightPick({ code, secret, targetId: String(body.targetId ?? "") });
+      if (result.ok) advanceLater(code);
       return reply(req, result, code, secret);
     }
 
     const result = await liveGet({ code, secret });
+    if (result.ok && result.game.status === "running") advanceLater(code);
     return reply(req, result, code, secret);
   } catch (error) {
     return storageError(error);
