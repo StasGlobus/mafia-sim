@@ -13,15 +13,18 @@ import fs from "fs";
 import path from "path";
 import { Client } from "pg";
 
+/** Same files Next.js reads: .env.local wins over .env, real environment wins over both. */
 function loadEnvLocal() {
-  const file = path.join(process.cwd(), ".env.local");
-  if (!fs.existsSync(file)) return;
-  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (!match) continue;
-    const [, key, raw] = match;
-    if (process.env[key!] !== undefined) continue;
-    process.env[key!] = raw!.replace(/^["']|["']$/g, "");
+  for (const name of [".env.local", ".env"]) {
+    const file = path.join(process.cwd(), name);
+    if (!fs.existsSync(file)) continue;
+    for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+      const match = line.match(/^\s*(?:export\s+)?([A-Za-z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (!match) continue;
+      const [, key, raw] = match;
+      if (process.env[key!] !== undefined) continue;
+      process.env[key!] = raw!.trim().replace(/^["']|["']$/g, "");
+    }
   }
 }
 
@@ -33,7 +36,7 @@ async function main() {
       [
         "SUPABASE_DB_URL is not set.",
         "Copy the connection string from Supabase > Project Settings > Database > Connection string (URI),",
-        "put it in .env.local as SUPABASE_DB_URL=postgresql://... and run this again.",
+        "put it in .env (or .env.local) as SUPABASE_DB_URL=postgresql://... and run this again.",
       ].join("\n"),
     );
     process.exit(1);
