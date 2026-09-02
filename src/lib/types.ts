@@ -47,6 +47,8 @@ export interface ChatMessage {
   text: string;
   ts: number;
   narrator?: boolean;
+  /** The message this agent reply answered. Used to prevent reply loops. */
+  replyToId?: string;
 }
 
 export interface GameConfig {
@@ -68,6 +70,8 @@ export interface AgentMemory {
   lastText: string;
   plannedVote: string | null;
   spokeAtProgress: number[];
+  /** Most recent direct question this agent has already handled. */
+  lastDirectMessageId?: string;
 }
 
 export interface LastKill {

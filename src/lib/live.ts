@@ -19,6 +19,7 @@ import {
   pickSeerInspect,
   pickWolfKill,
   resetDayTalk,
+  respondToDirectAddress,
   seerPulse,
   uniquePush,
   wolfPulse,
@@ -745,12 +746,15 @@ export async function liveSay(input: { code: string; secret: string; text: strin
   const dayOk = game.phase === "day" && game.openChannel === "public";
   if (!wolfOk && !dayOk) return { ok: false, error: "הצ'אט סגור עכשיו", status: 400 };
 
-  uniquePush(game, {
+  const sent = uniquePush(game, {
     channel: wolfOk ? "wolves" : "public",
     authorId: me.id,
     authorName: me.name,
     text,
   });
+  if (dayOk && sent) {
+    await respondToDirectAddress(game, sent);
+  }
   setLive(game);
   return viewOf(game, me, now);
 }

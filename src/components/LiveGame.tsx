@@ -106,8 +106,10 @@ export default function LiveGame({ code }: { code: string }) {
   const [tab, setTab] = useState<Tab>("chat");
   const [err, setErr] = useState<string | null>(null);
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const publicEnd = useRef<HTMLDivElement>(null);
+  const messageInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const stored = loadMe(code);
@@ -192,16 +194,28 @@ export default function LiveGame({ code }: { code: string }) {
   }
 
   async function send() {
-    if (!identity || !text.trim()) return;
+    if (!identity || !text.trim() || sending) return;
     const t = text.trim();
     setText("");
+    setSending(true);
     try {
       const data = await liveApi({ action: "say", code, secret: identity.secret, text: t });
       if (data.game) setView(data.game);
     } catch (er) {
       setText(t);
       setErr(er instanceof Error ? er.message : "לא הלך");
+    } finally {
+      setSending(false);
+      requestAnimationFrame(() => messageInput.current?.focus());
     }
+  }
+
+  function address(name: string) {
+    setText((current) => {
+      const body = current.replace(/^@?[\p{L}\p{N}]+[,،:]?\s*/u, "").trimStart();
+      return `${name}, ${body}`;
+    });
+    requestAnimationFrame(() => messageInput.current?.focus());
   }
 
   async function vote(targetId: string) {
@@ -354,8 +368,11 @@ export default function LiveGame({ code }: { code: string }) {
             <div className="chat-scroll min-h-0 flex-1 space-y-3 px-3 py-3">
               {view.messages
                 .filter((m) => m.channel !== "events")
-                .map((m) => (
-                  <div key={m.id}>
+                .map((m) => {
+                  const repliedTo = m.replyToId
+                    ? view.messages.find((candidate) => candidate.id === m.replyToId)
+                    : null;
+                  return <div key={m.id}>
                     {m.narrator ? (
                       <div className="mx-auto max-w-[90%] rounded-2xl bg-white/5 px-4 py-2 text-center text-sm text-dust">
                         {m.text}
@@ -371,31 +388,58 @@ export default function LiveGame({ code }: { code: string }) {
                         <div className="min-w-0">
                           <div className="mb-0.5 text-xs text-dust">{m.authorName}</div>
                           <div className="inline-block max-w-full rounded-2xl rounded-br-md bg-[#2a2420] px-3 py-2 text-[15px] leading-snug">
+                            {repliedTo && (
+                              <div className="mb-1 border-r-2 border-ember/60 pr-2 text-[11px] text-paper/45">
+                                בתגובה ל{repliedTo.authorName}
+                              </div>
+                            )}
                             {m.text}
                           </div>
                         </div>
                       </div>
                     )}
-                  </div>
-                ))}
+                  </div>;
+                })}
               <div ref={publicEnd} />
             </div>
             {view.me.canSpeak ? (
-              <form
-                className="flex gap-2 border-t border-white/10 px-3 py-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void send();
-                }}
-              >
-                <input
-                  className="min-h-12 min-w-0 flex-1 rounded-2xl bg-white/10 px-4 text-paper"
-                  placeholder={view.phase === "night_wolves" ? "לחבילה…" : "כתוב…"}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                />
-                <button className="min-h-12 rounded-2xl bg-paper px-4 font-extrabold text-ink">שלח</button>
-              </form>
+              <div className="border-t border-white/10">
+                {view.phase === "day" && (
+                  <div className="chat-scroll flex items-center gap-1.5 overflow-x-auto px-3 pb-1 pt-2" aria-label="פנייה מהירה לשחקן">
+                    <span className="shrink-0 text-[11px] text-dust">לפנות אל</span>
+                    {view.players.filter((player) => player.alive && !player.isMe).map((player) => (
+                      <button
+                        key={player.id}
+                        type="button"
+                        onClick={() => address(player.name)}
+                        className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-bold text-paper/65 hover:bg-white/10 hover:text-paper"
+                      >
+                        {player.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <form
+                  className="flex gap-2 px-3 py-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void send();
+                  }}
+                >
+                  <input
+                    ref={messageInput}
+                    className="min-h-12 min-w-0 flex-1 rounded-2xl bg-white/10 px-4 text-paper"
+                    placeholder={view.phase === "night_wolves" ? "לחבילה…" : "כתבו שם בתחילת ההודעה כדי לפנות אליו"}
+                    value={text}
+                    maxLength={240}
+                    onChange={(e) => setText(e.target.value)}
+                    aria-label="הודעה"
+                  />
+                  <button disabled={sending || !text.trim()} className="min-h-12 rounded-2xl bg-paper px-4 font-extrabold text-ink disabled:opacity-40">
+                    {sending ? "…" : "שלח"}
+                  </button>
+                </form>
+              </div>
             ) : (
               <div className="border-t border-white/10 px-3 py-3 text-center text-xs text-dust">
                 {view.me.alive ? "הצ'אט סגור עכשיו" : "רק קריאה"}

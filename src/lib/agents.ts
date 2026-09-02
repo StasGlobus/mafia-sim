@@ -79,29 +79,135 @@ export function uniquePush(
     authorName: string;
     text: string;
     narrator?: boolean;
+    replyToId?: string;
   },
-) {
+): GameState["messages"][number] | null {
   const allowed =
     Boolean(msg.narrator) ||
     msg.channel === "events" ||
     msg.channel === state.openChannel;
-  if (!allowed) return;
+  if (!allowed) return null;
   if (msg.channel === "public" && !msg.narrator) {
     const author = msg.authorId ? state.players.find((p) => p.id === msg.authorId) : null;
     if (author?.kind !== "human") {
-      if (state.usedPublicTexts.includes(msg.text)) return;
+      if (state.usedPublicTexts.includes(msg.text)) return null;
       state.usedPublicTexts.push(msg.text);
       if (state.usedPublicTexts.length > 80) state.usedPublicTexts.shift();
     }
   }
-  state.messages.push({
+  const saved: GameState["messages"][number] = {
     id: `m${state.messages.length + 1}_${Math.floor(rnd() * 1e6)}`,
     ts: Date.now(),
     ...msg,
-  });
+  };
+  state.messages.push(saved);
   if (state.messages.length > 500) {
     state.messages = state.messages.slice(-400);
   }
+  return saved;
+}
+
+function normalizedWords(text: string): string[] {
+  return text
+    .normalize("NFKC")
+    .replace(/[\u0591-\u05C7]/g, "")
+    .replace(/[^\p{L}\p{N}@]+/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.replace(/^@/, ""));
+}
+
+function isDirectlyAddressed(text: string, name: string): boolean {
+  const words = normalizedWords(text);
+  if (!words.length) return false;
+  if (text.includes(`@${name}`)) return true;
+  if (words[0] === "היי" && words[1] === name) return true;
+  if (words[0] === name) return true;
+  return /[?？]/.test(text) && words[words.length - 1] === name;
+}
+
+function directRecipient(
+  state: GameState,
+  message: GameState["messages"][number],
+): Player | null {
+  if (message.channel !== "public" || message.narrator || message.replyToId) return null;
+  return (
+    living(state).find(
+      (player) =>
+        player.kind !== "human" &&
+        player.id !== message.authorId &&
+        !player.muted &&
+        isDirectlyAddressed(message.text, player.name),
+    ) ?? null
+  );
+}
+
+function latestPendingDirectMessage(
+  state: GameState,
+): { agent: Player; message: GameState["messages"][number] } | null {
+  const recent = state.messages.filter((message) => message.channel === "public").slice(-20).reverse();
+  const newestMentionSeen = new Set<string>();
+  for (const message of recent) {
+    const agent = directRecipient(state, message);
+    if (!agent) continue;
+    // Only consider the newest direct message for each agent. Otherwise a reply
+    // to a new question could make an older, already superseded question resurface.
+    if (newestMentionSeen.has(agent.id)) continue;
+    newestMentionSeen.add(agent.id);
+    if (mem(state, agent.id).lastDirectMessageId === message.id) continue;
+    return { agent, message };
+  }
+  return null;
+}
+
+function directFallback(state: GameState, me: Player, message: GameState["messages"][number]): string {
+  const asker = state.players.find((player) => player.id === message.authorId);
+  const choices = others(state, me).filter((player) => player.id !== asker?.id);
+  const target = choices.find((player) => state.votes[me.id] === player.id) ?? pick(choices.length ? choices : others(state, me), rnd);
+  const prefix = asker ? `${asker.name}, ` : "";
+  const challenge = /(אתה\s+(זאב|משקר)|את\s+(זאבה|משקרת)|נראה לי ש?אתה|נראה לי ש?את)/.test(message.text);
+  if (challenge) return `${prefix}לא. דווקא ${target?.name ?? "מישהו פה"} לא מסתדר לי`;
+  if (/[?？]|מי|מה|למה|דעתך|חושב|חושבת|מרגיש|מרגישה|חשוד|חשודה/.test(message.text)) {
+    return `${prefix}${target?.name ?? "עוד אין לי שם"} הכי לא מסתדר לי כרגע`;
+  }
+  return `${prefix}ראיתי. אני עדיין מנסה להבין את ${target?.name ?? "כולם"}`;
+}
+
+async function sendDirectReply(
+  state: GameState,
+  agent: Player,
+  message: GameState["messages"][number],
+): Promise<boolean> {
+  const memory = mem(state, agent.id);
+  // Mark before the model call so a concurrent poll cannot answer twice.
+  memory.lastDirectMessageId = message.id;
+  const generated = await generateAgentLine({ state, me: agent, channel: "public", replyTo: message });
+  let text = generated ?? directFallback(state, agent, message);
+  if (text === memory.lastText) text = directFallback(state, agent, message);
+  if (!text) return false;
+  const saved = uniquePush(state, {
+    channel: "public",
+    authorId: agent.id,
+    authorName: agent.name,
+    text,
+    replyToId: message.id,
+  });
+  if (!saved) return false;
+  memory.lastText = text;
+  memory.messagesToday += 1;
+  return true;
+}
+
+/** Immediately answers a human message when it starts with a living agent's name. */
+export async function respondToDirectAddress(
+  state: GameState,
+  message: GameState["messages"][number],
+): Promise<boolean> {
+  if (state.openChannel !== "public") return false;
+  const agent = directRecipient(state, message);
+  if (!agent) return false;
+  return sendDirectReply(state, agent, message);
 }
 
 function randomTarget(cands: Player[], avoid?: string): Player | null {
@@ -261,37 +367,42 @@ export async function dayPulse(state: GameState) {
   const alive = living(state);
 
   if (state.openChannel === "public") {
-    const candidates = alive.filter((me) => {
-      if (me.kind === "human") return false;
-      if (me.muted) return false;
-      const m = mem(state, me.id);
-      if (m.messagesToday >= maxMessages(me.personality)) return false;
-      if (m.spokeAtProgress.some((x) => Math.abs(x - progress) < 0.08)) return false;
-      return rnd() <= speakChance(me.personality) * (progress < 0.08 ? 1.4 : 1);
-    });
-    const me = candidates.length ? pick(candidates, rnd) : null;
-    if (me) {
-      const m = mem(state, me.id);
-      const cands = others(state, me);
-      const t = randomTarget(cands);
-      const kind = kindForDay(state, me, progress);
-      const vars = {
-        t: t?.name ?? "מישהו",
-        d: state.lastKill?.name ?? "מישהו",
-        r: state.lastKill?.role ? roleWord(state.lastKill.role) : "?",
-      };
-      const llm = await generateAgentLine({ state, me, channel: "public" });
-      const text = llm ?? lineFor(me.personality, kind, vars, rnd);
-      if (text && text !== m.lastText) {
-        uniquePush(state, {
-          channel: "public",
-          authorId: me.id,
-          authorName: me.name,
-          text,
-        });
-        m.lastText = text;
-        m.messagesToday += 1;
-        m.spokeAtProgress.push(progress);
+    const direct = latestPendingDirectMessage(state);
+    if (direct) {
+      await sendDirectReply(state, direct.agent, direct.message);
+    } else {
+      const candidates = alive.filter((me) => {
+        if (me.kind === "human") return false;
+        if (me.muted) return false;
+        const m = mem(state, me.id);
+        if (m.messagesToday >= maxMessages(me.personality)) return false;
+        if (m.spokeAtProgress.some((x) => Math.abs(x - progress) < 0.08)) return false;
+        return rnd() <= speakChance(me.personality) * (progress < 0.08 ? 1.4 : 1);
+      });
+      const me = candidates.length ? pick(candidates, rnd) : null;
+      if (me) {
+        const m = mem(state, me.id);
+        const cands = others(state, me);
+        const t = randomTarget(cands);
+        const kind = kindForDay(state, me, progress);
+        const vars = {
+          t: t?.name ?? "מישהו",
+          d: state.lastKill?.name ?? "מישהו",
+          r: state.lastKill?.role ? roleWord(state.lastKill.role) : "?",
+        };
+        const llm = await generateAgentLine({ state, me, channel: "public" });
+        const text = llm ?? lineFor(me.personality, kind, vars, rnd);
+        if (text && text !== m.lastText) {
+          uniquePush(state, {
+            channel: "public",
+            authorId: me.id,
+            authorName: me.name,
+            text,
+          });
+          m.lastText = text;
+          m.messagesToday += 1;
+          m.spokeAtProgress.push(progress);
+        }
       }
     }
   }
