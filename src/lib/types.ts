@@ -28,6 +28,9 @@ export type Speed = 1 | 2 | 4 | 8 | 16;
 export type IdentityMode = "aliases" | "real";
 export type BotMode = "fill" | "humans_only";
 export type DirectorStyle = "classic" | "dynamic" | "wild";
+/** `scheduled` plays one day per calendar day inside play hours; `quick` runs in minutes. */
+export type GameMode = "scheduled" | "quick";
+export type Gender = "m" | "f";
 
 export interface LiveRules {
   seats: number;
@@ -37,6 +40,11 @@ export interface LiveRules {
   identityMode: IdentityMode;
   botMode: BotMode;
   directorStyle: DirectorStyle;
+  mode: GameMode;
+  /** Quick mode only: length of a day in minutes. */
+  quickDayMinutes: number;
+  /** Quick mode only: length of a whole night in minutes. */
+  quickNightMinutes: number;
 }
 
 export const DEFAULT_LIVE_RULES: LiveRules = {
@@ -47,7 +55,13 @@ export const DEFAULT_LIVE_RULES: LiveRules = {
   identityMode: "aliases",
   botMode: "fill",
   directorStyle: "dynamic",
+  mode: "scheduled",
+  quickDayMinutes: 8,
+  quickNightMinutes: 3,
 };
+
+export const QUICK_DAY_OPTIONS = [5, 8, 12, 20] as const;
+export const QUICK_NIGHT_OPTIONS = [2, 3, 5] as const;
 
 export type DirectorEventType = "omen" | "silence" | "lost_vote" | "leak" | "blood_moon";
 
@@ -71,6 +85,8 @@ export interface Player {
   kind?: PlayerKind;
   realName?: string | null;
   host?: boolean;
+  /** Grammatical gender for Hebrew agreement. */
+  gender?: Gender;
 }
 
 export interface ChatMessage {
@@ -83,6 +99,8 @@ export interface ChatMessage {
   narrator?: boolean;
   /** The message this agent reply answered. Used to prevent reply loops. */
   replyToId?: string;
+  /** Visual tone for narrator messages. */
+  tone?: "recap" | "alert" | "director" | "reveal";
 }
 
 export interface GameConfig {
@@ -106,6 +124,37 @@ export interface AgentMemory {
   spokeAtProgress: number[];
   /** Most recent direct question this agent has already handled. */
   lastDirectMessageId?: string;
+  /** Live-game scheduler. Times are epoch ms; null means nothing planned. */
+  nextSpeakAt?: number | null;
+  reaction?: AgentReaction | null;
+  voteAt?: number | null;
+  closingAt?: number | null;
+  actAt?: number | null;
+  budgetToday?: number;
+  reactionsToday?: number;
+  lastSpokeAt?: number;
+  reactedToMorning?: boolean;
+  /** Who this agent suspects and how strongly. Positive means suspicious. */
+  suspicion?: Record<string, number>;
+  /** Short Hebrew reason per suspect, for consistent talk. */
+  reasons?: Record<string, string>;
+  /** What this agent said today, so it stays consistent. */
+  saidToday?: string[];
+  claimed?: boolean;
+}
+
+export interface AgentReaction {
+  kind: "reply" | "defend" | "react" | "push" | "claim" | "wolf_plan";
+  dueAt: number;
+  messageId?: string;
+  aboutId?: string;
+}
+
+export interface LastLynch {
+  targetId: string;
+  role: Role;
+  voters: string[];
+  dayNumber: number;
 }
 
 export interface LastKill {
@@ -139,6 +188,9 @@ export interface GameState {
   eventLog: string[];
   memories: Record<string, AgentMemory>;
   usedPublicTexts: string[];
+  /** Public role claims (player id to role). */
+  claims?: Record<string, Role>;
+  lastLynch?: LastLynch | null;
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -240,12 +292,15 @@ export interface LiveGame extends GameState {
   nightEndAt: number;
   rules: LiveRules;
   directorEvents: DirectorEvent[];
+  remindersSent?: string[];
+  lastHumanActionAt?: number;
 }
 
 export interface LiveMeView {
   playerId: string;
   fakeName: string;
   realName: string;
+  gender: Gender;
   role: Role | null;
   alive: boolean;
   muted: boolean;
@@ -264,6 +319,7 @@ export interface LiveMeView {
 export interface LivePlayerView {
   id: string;
   name: string;
+  gender: Gender;
   alive: boolean;
   isMe: boolean;
   role: Role | null;
@@ -292,6 +348,8 @@ export interface LiveView {
   seats: number;
   rules: LiveRules;
   directorEvents: DirectorEvent[];
+  /** Agents about to write in the channel the viewer can see right now. */
+  typing: string[];
   me: LiveMeView;
   now: string;
 }
@@ -299,6 +357,7 @@ export interface LiveView {
 export interface AdminPlayerView {
   id: string;
   name: string;
+  gender: Gender;
   realName: string | null;
   kind: PlayerKind;
   alive: boolean;

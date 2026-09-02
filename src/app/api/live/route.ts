@@ -11,7 +11,7 @@ import {
   startLiveGame,
   type ActionResult,
 } from "@/lib/live";
-import { getLive } from "@/lib/live-store";
+import { getLive, LiveStoreConflictError, LiveStoreUnavailableError } from "@/lib/live-store";
 import type { LiveRules } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -69,104 +69,125 @@ function secretFrom(req: NextRequest, body: { code?: string; secret?: string }, 
 }
 
 export async function GET(req: NextRequest) {
-  const code = (req.nextUrl.searchParams.get("code") ?? "").trim().toUpperCase();
-  if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
-  const secret = secretFrom(req, { code }, code);
-  const asAdmin = req.nextUrl.searchParams.get("asAdmin") === "true";
-  if (!secret) {
-    const game = getLive(code);
-    if (!game) return NextResponse.json({ error: "אין משחק כזה" }, { status: 404 });
-    return NextResponse.json({
-      needsAuth: true,
-      status: game.status === "idle" ? "lobby" : game.status === "ended" ? "ended" : "running",
-      phase: game.phase,
-      humansJoined: game.players.filter((p) => p.kind === "human").length,
-      seats: game.rules?.seats ?? 8,
-      rules: game.rules,
-      code: game.code,
-    });
-  }
-  if (asAdmin) {
-    const result = await liveAdminGet({ code, secret });
+  try {
+    const code = (req.nextUrl.searchParams.get("code") ?? "").trim().toUpperCase();
+    if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
+    const secret = secretFrom(req, { code }, code);
+    const asAdmin = req.nextUrl.searchParams.get("asAdmin") === "true";
+    if (!secret) {
+      const game = await getLive(code);
+      if (!game) return NextResponse.json({ error: "אין משחק כזה" }, { status: 404 });
+      return NextResponse.json({
+        needsAuth: true,
+        status: game.status === "idle" ? "lobby" : game.status === "ended" ? "ended" : "running",
+        phase: game.phase,
+        humansJoined: game.players.filter((p) => p.kind === "human").length,
+        seats: game.rules?.seats ?? 8,
+        rules: game.rules,
+        code: game.code,
+      });
+    }
+    if (asAdmin) {
+      const result = await liveAdminGet({ code, secret });
+      return reply(req, result, code, secret);
+    }
+    const result = await liveGet({ code, secret });
     return reply(req, result, code, secret);
+  } catch (error) {
+    return storageError(error);
   }
-  const result = await liveGet({ code, secret });
-  return reply(req, result, code, secret);
 }
 
 export async function POST(req: NextRequest) {
-  let body: Record<string, unknown> = {};
   try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    body = {};
-  }
-  const action = typeof body.action === "string" ? body.action : "get";
-
-  if (action === "create") {
-    const result = createLiveGame({
-      realName: String(body.realName ?? ""),
-      dayStart: typeof body.dayStart === "string" ? body.dayStart : undefined,
-      dayEnd: typeof body.dayEnd === "string" ? body.dayEnd : undefined,
-      days: Array.isArray(body.days) ? (body.days as number[]) : undefined,
-      rules: typeof body.rules === "object" && body.rules ? body.rules as Partial<LiveRules> : undefined,
-    });
-    return reply(req, result);
-  }
-
-  const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
-
-  if (action === "join") {
-    const cookieSecret = code ? readAuth(req)[code]?.secret : undefined;
-    const result = joinLiveGame({
-      code,
-      realName: String(body.realName ?? ""),
-      secret: typeof body.secret === "string" ? body.secret : cookieSecret,
-    });
-    return reply(req, result);
-  }
-
-  const secret = secretFrom(req, { code, secret: typeof body.secret === "string" ? body.secret : undefined }, code);
-  if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
-  if (!secret) return NextResponse.json({ error: "חסר מפתח" }, { status: 401 });
-
-  const asAdmin = body.asAdmin === true;
-
-  if (action === "admin" || (action === "get" && asAdmin)) {
-    const result = await liveAdminGet({ code, secret });
-    return reply(req, result, code, secret);
-  }
-  if (action === "setSchedule") {
-    const result = setLiveSchedule({
-      code,
-      secret,
-      dayStart: typeof body.dayStart === "string" ? body.dayStart : undefined,
-      dayEnd: typeof body.dayEnd === "string" ? body.dayEnd : undefined,
-      days: Array.isArray(body.days) ? (body.days as number[]) : undefined,
-    });
-    return reply(req, result, code, secret);
-  }
-  if (action === "start") {
-    const result = await startLiveGame({ code, secret });
-    if (result.ok && asAdmin) {
-      const admin = await liveAdminGet({ code, secret });
-      return reply(req, admin, code, secret);
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      body = {};
     }
-    return reply(req, result, code, secret);
-  }
-  if (action === "say") {
-    const result = await liveSay({ code, secret, text: String(body.text ?? "") });
-    return reply(req, result, code, secret);
-  }
-  if (action === "vote") {
-    const result = await liveVote({ code, secret, targetId: String(body.targetId ?? "") });
-    return reply(req, result, code, secret);
-  }
-  if (action === "nightPick") {
-    const result = await liveNightPick({ code, secret, targetId: String(body.targetId ?? "") });
-    return reply(req, result, code, secret);
-  }
+    const action = typeof body.action === "string" ? body.action : "get";
 
-  const result = await liveGet({ code, secret });
-  return reply(req, result, code, secret);
+    if (action === "create") {
+      const result = await createLiveGame({
+        realName: String(body.realName ?? ""),
+        gender: typeof body.gender === "string" ? body.gender : undefined,
+        dayStart: typeof body.dayStart === "string" ? body.dayStart : undefined,
+        dayEnd: typeof body.dayEnd === "string" ? body.dayEnd : undefined,
+        days: Array.isArray(body.days) ? (body.days as number[]) : undefined,
+        rules: typeof body.rules === "object" && body.rules ? body.rules as Partial<LiveRules> : undefined,
+      });
+      return reply(req, result);
+    }
+
+    const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
+
+    if (action === "join") {
+      const cookieSecret = code ? readAuth(req)[code]?.secret : undefined;
+      const result = await joinLiveGame({
+        code,
+        realName: String(body.realName ?? ""),
+        gender: typeof body.gender === "string" ? body.gender : undefined,
+        secret: typeof body.secret === "string" ? body.secret : cookieSecret,
+      });
+      return reply(req, result);
+    }
+
+    const secret = secretFrom(req, { code, secret: typeof body.secret === "string" ? body.secret : undefined }, code);
+    if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
+    if (!secret) return NextResponse.json({ error: "חסר מפתח" }, { status: 401 });
+
+    const asAdmin = body.asAdmin === true;
+
+    if (action === "admin" || (action === "get" && asAdmin)) {
+      const result = await liveAdminGet({ code, secret });
+      return reply(req, result, code, secret);
+    }
+    if (action === "setSchedule") {
+      const result = await setLiveSchedule({
+        code,
+        secret,
+        dayStart: typeof body.dayStart === "string" ? body.dayStart : undefined,
+        dayEnd: typeof body.dayEnd === "string" ? body.dayEnd : undefined,
+        days: Array.isArray(body.days) ? (body.days as number[]) : undefined,
+      });
+      return reply(req, result, code, secret);
+    }
+    if (action === "start") {
+      const result = await startLiveGame({ code, secret });
+      if (result.ok && asAdmin) {
+        const admin = await liveAdminGet({ code, secret });
+        return reply(req, admin, code, secret);
+      }
+      return reply(req, result, code, secret);
+    }
+    if (action === "say") {
+      const result = await liveSay({ code, secret, text: String(body.text ?? "") });
+      return reply(req, result, code, secret);
+    }
+    if (action === "vote") {
+      const result = await liveVote({ code, secret, targetId: String(body.targetId ?? "") });
+      return reply(req, result, code, secret);
+    }
+    if (action === "nightPick") {
+      const result = await liveNightPick({ code, secret, targetId: String(body.targetId ?? "") });
+      return reply(req, result, code, secret);
+    }
+
+    const result = await liveGet({ code, secret });
+    return reply(req, result, code, secret);
+  } catch (error) {
+    return storageError(error);
+  }
+}
+
+function storageError(error: unknown) {
+  if (error instanceof LiveStoreConflictError) {
+    return NextResponse.json({ error: "המשחק עודכן על ידי שחקן אחר. רענן ונסה שוב." }, { status: 409 });
+  }
+  if (error instanceof LiveStoreUnavailableError) {
+    return NextResponse.json({ error: "שמירת המשחק אינה זמינה כרגע. נסה שוב בעוד רגע." }, { status: 503 });
+  }
+  console.error("Live game API failed", error);
+  return NextResponse.json({ error: "שגיאת שרת" }, { status: 500 });
 }

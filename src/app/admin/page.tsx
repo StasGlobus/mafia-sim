@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { ROOM_CODE_LENGTH, WEEKDAY_CHIPS, type BotMode, type DirectorStyle, type IdentityMode } from "@/lib/types";
+import { QUICK_DAY_OPTIONS, QUICK_NIGHT_OPTIONS, ROOM_CODE_LENGTH, WEEKDAY_CHIPS, type BotMode, type DirectorStyle, type GameMode, type Gender, type IdentityMode } from "@/lib/types";
 
 function saveMe(code: string, me: { playerId: string; secret: string; fakeName: string }) {
   try {
@@ -32,6 +32,10 @@ export default function AdminHomePage() {
   const [identityMode, setIdentityMode] = useState<IdentityMode>("aliases");
   const [botMode, setBotMode] = useState<BotMode>("fill");
   const [directorStyle, setDirectorStyle] = useState<DirectorStyle>("dynamic");
+  const [mode, setMode] = useState<GameMode>("scheduled");
+  const [quickDayMinutes, setQuickDayMinutes] = useState<number>(8);
+  const [quickNightMinutes, setQuickNightMinutes] = useState<number>(3);
+  const [gender, setGender] = useState<Gender>("m");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -62,10 +66,11 @@ export default function AdminHomePage() {
         body: JSON.stringify({
           action: "create",
           realName: realName.trim(),
+          gender,
           dayStart,
           dayEnd,
           days,
-          rules: { seats, wolfCount, hasSeer, hasDoctor, identityMode, botMode, directorStyle },
+          rules: { seats, wolfCount, hasSeer, hasDoctor, identityMode, botMode, directorStyle, mode, quickDayMinutes, quickNightMinutes },
         }),
       });
       const data = (await res.json()) as {
@@ -156,7 +161,43 @@ export default function AdminHomePage() {
                   maxLength={24}
                   required
                 />
+                <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="איך לפנות אליך">
+                  {([["m", "פונים אליי בזכר"], ["f", "פונים אליי בנקבה"]] as const).map(([id, label]) => (
+                    <button key={id} type="button" role="radio" aria-checked={gender === id} onClick={() => setGender(id)} className={`min-h-10 rounded-xl border text-xs font-bold transition ${gender === id ? "border-paper/50 bg-paper/10 text-paper" : "border-white/10 bg-white/[.03] text-paper/50"}`}>{label}</button>
+                  ))}
+                </div>
               </label>
+
+              <ChoiceGroup
+                title="קצב המשחק"
+                value={mode}
+                onChange={(value) => setMode(value as GameMode)}
+                options={[
+                  ["scheduled", "מתמשך", "יום אחד בכל יום, לפי שעות הכפר"],
+                  ["quick", "מהיר", "כל המשחק בישיבה אחת, בדקות"],
+                ]}
+              />
+
+              {mode === "quick" && (
+                <fieldset>
+                  <legend className="text-sm font-bold text-paper/75">אורך היום והלילה</legend>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <label className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                      <span className="text-paper/50">יום (דקות)</span>
+                      <select value={quickDayMinutes} onChange={(event) => setQuickDayMinutes(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded-xl bg-white/10 px-3 font-black text-paper">
+                        {QUICK_DAY_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                    <label className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                      <span className="text-paper/50">לילה (דקות)</span>
+                      <select value={quickNightMinutes} onChange={(event) => setQuickNightMinutes(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded-xl bg-white/10 px-3 font-black text-paper">
+                        {QUICK_NIGHT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-paper/40">הבוטים מדברים בקצב של קבוצה חיה. משחק של 8 שחקנים נגמר בדרך כלל תוך 30–50 דקות.</p>
+                </fieldset>
+              )}
 
               <fieldset>
                 <legend className="text-sm font-bold text-paper/75">הרכב הכפר</legend>
@@ -219,6 +260,7 @@ export default function AdminHomePage() {
                 ]}
               />
 
+              {mode === "scheduled" && (<>
               <fieldset>
                 <legend className="text-sm font-bold text-paper/75">מתי הכפר פתוח?</legend>
                 <p className="mt-1 text-xs leading-5 text-paper/40">בשעות היום מדברים ומצביעים. בלילה בעלי התפקידים פועלים.</p>
@@ -254,6 +296,7 @@ export default function AdminHomePage() {
                   })}
                 </div>
               </fieldset>
+              </>)}
 
               {err && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{err}</p>}
 

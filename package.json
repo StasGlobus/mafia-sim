@@ -5,10 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "smoke": "tsx scripts/smoke-live.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "db:migrate": "tsx scripts/db-migrate.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.53",
+    "@supabase/supabase-js": "^2.114.0",
     "ai": "^7.0.87",
     "next": "^15.5.2",
     "react": "^19.0.0",
@@ -16,11 +20,14 @@
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.20",
+    "pg": "^8.23.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   },
   "engines": {

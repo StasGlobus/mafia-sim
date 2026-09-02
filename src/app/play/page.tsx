@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { ROOM_CODE_LENGTH } from "@/lib/types";
+import { ROOM_CODE_LENGTH, type Gender } from "@/lib/types";
 
 function saveMe(code: string, me: { playerId: string; secret: string; fakeName: string }) {
   try {
@@ -22,6 +22,7 @@ export default function PlayPage() {
   const router = useRouter();
   const [realName, setRealName] = useState("");
   const [code, setCode] = useState("");
+  const [gender, setGender] = useState<Gender>("m");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,7 +35,7 @@ export default function PlayPage() {
       const res = await fetch("/api/live", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "join", code: code.trim(), realName: realName.trim() }),
+        body: JSON.stringify({ action: "join", code: code.trim(), realName: realName.trim(), gender }),
       });
       const data = (await res.json()) as {
         error?: string;
@@ -103,6 +104,11 @@ export default function PlayPage() {
                   required
                 />
                 <span className="mt-2 block text-xs text-paper/40">המשחק יציג אותו רק אם המנהל בחר שמות אמיתיים.</span>
+                <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label="איך לפנות אליך">
+                  {([["m", "פונים אליי בזכר"], ["f", "פונים אליי בנקבה"]] as const).map(([id, label]) => (
+                    <button key={id} type="button" role="radio" aria-checked={gender === id} onClick={() => setGender(id)} className={`min-h-10 rounded-xl border text-xs font-bold transition ${gender === id ? "border-paper/50 bg-paper/10 text-paper" : "border-white/10 bg-white/[.03] text-paper/50"}`}>{label}</button>
+                  ))}
+                </div>
               </label>
 
               <label className="block" htmlFor="room-code">

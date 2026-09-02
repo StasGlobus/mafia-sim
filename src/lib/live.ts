@@ -1,46 +1,58 @@
 import crypto from "crypto";
-import type { AdminView, DirectorEvent, LiveGame, LiveRules, LiveSchedule, LiveView, Personality, Player, Role } from "./types";
+import type {
+  AdminView,
+  ChatMessage,
+  DirectorEvent,
+  Gender,
+  LiveGame,
+  LiveRules,
+  LiveSchedule,
+  LiveView,
+  Personality,
+  Player,
+  Role,
+} from "./types";
 import {
   DEFAULT_CONFIG,
   DEFAULT_LIVE_RULES,
   DEFAULT_SCHEDULE,
   MAX_LIVE_SEATS,
   MIN_LIVE_SEATS,
+  QUICK_DAY_OPTIONS,
+  QUICK_NIGHT_OPTIONS,
   ROOM_CODE_LENGTH,
   ROLE_HE,
 } from "./types";
-import { pickNames, shuffle } from "./names";
-import { NAME_POOL } from "./names";
-import {
-  ALL_PERSONALITIES,
-  checkWin,
-  majorityTarget,
-  openFor,
-} from "./engine";
-import {
-  dayPulse,
-  doctorPulse,
-  living,
-  pickDoctorSave,
-  pickDayVote,
-  pickSeerInspect,
-  pickWolfKill,
-  resetDayTalk,
-  respondToDirectAddress,
-  seerPulse,
-  uniquePush,
-  wolfPulse,
-} from "./agents";
-import { getLive, hasLive, setLive } from "./live-store";
+import { genderOfName, NAMES, NAME_POOL, pickNames, shuffle } from "./names";
+import { ALL_PERSONALITIES, checkWin, majorityTarget, openFor } from "./engine";
+import { living, pickDoctorSave, pickSeerInspect, pickWolfKill, resetDayTalk, uniquePush } from "./agents";
+import { getLive, LiveStoreConflictError, releaseLeaseLive, setLive, tryLeaseLive } from "./live-store";
 import { adminView, playerView, prettyJerusalem } from "./view";
 import { chooseDirectorEvent } from "./director";
+import {
+  chooseVote,
+  endReveal,
+  ensureAgentState,
+  makeBudget,
+  onDirectorEvent,
+  onNewDay,
+  onPublicMessage,
+  onVote,
+  onWolfMessage,
+  runAgentEvents,
+  scheduleDay,
+  scheduleNight,
+  scheduleNightStep,
+  type TickBudget,
+} from "./live-agents";
 
 export { prettyJerusalem };
 
 const TZ = "Asia/Jerusalem";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const PULSE_EVERY_MS = 25_000;
 const MAX_WINDOW_STEPS = 8;
+const LEASE_MS = 15_000;
+const MIN = 60_000;
 const HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 function rnd() {
@@ -67,8 +79,13 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+function pickAllowed<T extends number>(value: unknown, options: readonly T[], fallback: T): T {
+  const n = Number(value);
+  return (options as readonly number[]).includes(n) ? (n as T) : fallback;
+}
+
 function rulesFor(game: LiveGame): LiveRules {
-  const raw = game.rules ?? DEFAULT_LIVE_RULES;
+  const raw: Partial<LiveRules> = game.rules ?? DEFAULT_LIVE_RULES;
   const seats = clamp(raw.seats ?? DEFAULT_LIVE_RULES.seats, MIN_LIVE_SEATS, MAX_LIVE_SEATS);
   const wolfCount = clamp(raw.wolfCount ?? Math.max(1, Math.floor(seats / 4)), 1, Math.max(1, Math.floor((seats - 1) / 2)));
   const rules: LiveRules = {
@@ -78,7 +95,10 @@ function rulesFor(game: LiveGame): LiveRules {
     hasDoctor: raw.hasDoctor ?? true,
     identityMode: raw.identityMode === "real" ? "real" : "aliases",
     botMode: raw.botMode === "humans_only" ? "humans_only" : "fill",
-    directorStyle: ["classic", "dynamic", "wild"].includes(raw.directorStyle) ? raw.directorStyle : "dynamic",
+    directorStyle: raw.directorStyle && ["classic", "dynamic", "wild"].includes(raw.directorStyle) ? raw.directorStyle : "dynamic",
+    mode: raw.mode === "quick" ? "quick" : "scheduled",
+    quickDayMinutes: pickAllowed(raw.quickDayMinutes, QUICK_DAY_OPTIONS, DEFAULT_LIVE_RULES.quickDayMinutes),
+    quickNightMinutes: pickAllowed(raw.quickNightMinutes, QUICK_NIGHT_OPTIONS, DEFAULT_LIVE_RULES.quickNightMinutes),
   };
   game.rules = rules;
   game.directorEvents ??= [];
@@ -95,7 +115,19 @@ function parseRules(input: Partial<LiveRules>): LiveRules {
     identityMode: input.identityMode === "real" ? "real" : "aliases",
     botMode: input.botMode === "humans_only" ? "humans_only" : "fill",
     directorStyle: input.directorStyle === "classic" || input.directorStyle === "wild" ? input.directorStyle : "dynamic",
+    mode: input.mode === "quick" ? "quick" : "scheduled",
+    quickDayMinutes: pickAllowed(input.quickDayMinutes, QUICK_DAY_OPTIONS, DEFAULT_LIVE_RULES.quickDayMinutes),
+    quickNightMinutes: pickAllowed(input.quickNightMinutes, QUICK_NIGHT_OPTIONS, DEFAULT_LIVE_RULES.quickNightMinutes),
   };
+}
+
+function parseGender(raw: unknown, name: string): Gender {
+  if (raw === "f" || raw === "m") return raw;
+  return genderOfName(name);
+}
+
+function isQuick(game: LiveGame) {
+  return rulesFor(game).mode === "quick";
 }
 
 function roleDeck(count: number, rules: LiveRules): Role[] {
@@ -107,8 +139,8 @@ function roleDeck(count: number, rules: LiveRules): Role[] {
   return deck;
 }
 
-function publicName(realName: string, rules: LiveRules, used: string[]) {
-  if (rules.identityMode === "aliases") return nextFakeName(used);
+function publicName(realName: string, gender: Gender, rules: LiveRules, used: string[]) {
+  if (rules.identityMode === "aliases") return nextFakeName(used, gender);
   if (!used.includes(realName)) return realName;
   let suffix = 2;
   while (used.includes(`${realName} ${suffix}`)) suffix += 1;
@@ -127,6 +159,7 @@ export function secretsEqual(a: string, b: string): boolean {
 }
 
 export function findPlayerBySecret(game: LiveGame, secret: string): Player | null {
+  if (!secret) return null;
   for (const [id, s] of Object.entries(game.secrets)) {
     if (secretsEqual(s, secret)) {
       return game.players.find((p) => p.id === id) ?? null;
@@ -134,6 +167,10 @@ export function findPlayerBySecret(game: LiveGame, secret: string): Player | nul
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Time in Jerusalem
+// ---------------------------------------------------------------------------
 
 function parseHm(hm: string): { h: number; m: number } {
   const [h, m] = hm.split(":").map((x) => Number(x));
@@ -156,15 +193,7 @@ export function tzParts(ms: number) {
   for (const p of fmt.formatToParts(new Date(ms))) {
     if (p.type !== "literal") obj[p.type] = p.value;
   }
-  const wd: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
+  const wd: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   return {
     year: Number(obj.year),
     month: Number(obj.month),
@@ -176,14 +205,7 @@ export function tzParts(ms: number) {
   };
 }
 
-export function jerusalemToUtc(
-  year: number,
-  month: number,
-  day: number,
-  hour: number,
-  minute: number,
-  second = 0,
-): number {
+export function jerusalemToUtc(year: number, month: number, day: number, hour: number, minute: number, second = 0): number {
   let utc = Date.UTC(year, month - 1, day, hour, minute, second);
   for (let i = 0; i < 6; i++) {
     const p = tzParts(utc);
@@ -222,13 +244,17 @@ function todayDayEnd(ms: number, schedule: LiveSchedule): number {
   return jerusalemToUtc(p.year, p.month, p.day, e.h, e.m);
 }
 
-function todayDayStart(ms: number, schedule: LiveSchedule): number {
-  const p = tzParts(ms);
-  const s = parseHm(schedule.dayStart);
-  return jerusalemToUtc(p.year, p.month, p.day, s.h, s.m);
-}
-
-function initialWindow(now: number, schedule: LiveSchedule) {
+function initialWindow(game: LiveGame, now: number) {
+  if (isQuick(game)) {
+    return {
+      phase: "day" as const,
+      windowStartAt: now,
+      nextLockAt: now + rulesFor(game).quickDayMinutes * MIN,
+      dayNumber: 1,
+      waitWeekday: null as number | null,
+    };
+  }
+  const schedule = game.schedule;
   const p = tzParts(now);
   const start = parseHm(schedule.dayStart);
   const end = parseHm(schedule.dayEnd);
@@ -236,31 +262,25 @@ function initialWindow(now: number, schedule: LiveSchedule) {
   const endMs = jerusalemToUtc(p.year, p.month, p.day, end.h, end.m);
   const play = schedule.days.includes(p.weekday);
   if (play && now >= startMs && now < endMs) {
-    return {
-      phase: "day" as const,
-      windowStartAt: startMs,
-      nextLockAt: endMs,
-      dayNumber: 1,
-      waitWeekday: null as number | null,
-    };
+    return { phase: "day" as const, windowStartAt: startMs, nextLockAt: endMs, dayNumber: 1, waitWeekday: null as number | null };
   }
   const next = nextPlayDayStart(now, schedule);
-  return {
-    phase: "wait" as const,
-    windowStartAt: now,
-    nextLockAt: next,
-    dayNumber: 0,
-    waitWeekday: tzParts(next).weekday,
-  };
+  return { phase: "wait" as const, windowStartAt: now, nextLockAt: next, dayNumber: 0, waitWeekday: tzParts(next).weekday };
 }
 
-function announce(game: LiveGame, text: string) {
+// ---------------------------------------------------------------------------
+// Narration and deaths
+// ---------------------------------------------------------------------------
+
+function announce(game: LiveGame, text: string, at?: number, tone?: ChatMessage["tone"]) {
   uniquePush(game, {
     channel: "public",
     authorId: null,
     authorName: "מערכת",
     text,
     narrator: true,
+    ts: at,
+    tone,
   });
 }
 
@@ -276,9 +296,10 @@ function liveKill(game: LiveGame, id: string, how: string, at: number) {
   p.alive = false;
   const roleHe = ROLE_HE[p.role];
   const kind = p.kind === "human" ? "human" : "agent";
-  const extra =
-    kind === "human" && p.realName ? `היה ${p.realName}.` : "לא היה בן אדם.";
-  announce(game, `${p.name} ${how}. היה ${roleHe}. ${extra}`);
+  const f = p.gender === "f";
+  const was = f ? "הייתה" : "היה";
+  const extra = kind === "human" && p.realName ? `${was} ${p.realName}.` : `לא ${was} בן אדם.`;
+  announce(game, `${p.name} ${how}. ${was} ${roleHe}. ${extra}`, at);
   game.deaths.push({
     playerId: p.id,
     name: p.name,
@@ -290,6 +311,14 @@ function liveKill(game: LiveGame, id: string, how: string, at: number) {
     ts: at,
   });
   game.eventLog.push(`יום ${game.dayNumber}: ${p.name} מת (${roleHe})`);
+}
+
+function finishIfWon(game: LiveGame, at: number): boolean {
+  if (!checkWin(game, at)) return false;
+  endReveal(game, at);
+  game.nextLockAt = at;
+  game.openChannel = "none";
+  return true;
 }
 
 const DIRECTOR_TITLES: Record<DirectorEvent["type"], string> = {
@@ -315,16 +344,14 @@ async function applyDirectorEvent(game: LiveGame, at: number) {
     const target = randomOne(alive);
     if (!target) return;
     target.muted = true;
-    text = `${text} ${target.name} לא יכול לדבר היום.`;
+    text = `${text} ${target.name} לא ${target.gender === "f" ? "יכולה" : "יכול"} לדבר היום.`;
   } else if (decision.type === "lost_vote") {
     const target = randomOne(alive);
     if (!target) return;
     target.cannotVote = true;
     text = `${text} הקול של ${target.name} לא ייספר היום.`;
   } else if (decision.type === "leak") {
-    const whisper = [...game.messages]
-      .reverse()
-      .find((message) => message.channel === "wolves" && !message.narrator);
+    const whisper = [...game.messages].reverse().find((message) => message.channel === "wolves" && !message.narrator);
     if (!whisper) return;
     text = `${text} “${whisper.text.slice(0, 110)}”`;
   } else if (decision.type === "omen") {
@@ -336,8 +363,8 @@ async function applyDirectorEvent(game: LiveGame, at: number) {
   } else if (decision.type === "blood_moon") {
     const extraVictim = randomOne(alive.filter((player) => player.role !== "wolf"));
     if (!extraVictim) return;
-    text = `${text} ${extraVictim.name} נעלם תחת הירח האדום.`;
-    liveKill(game, extraVictim.id, "נעלם תחת הירח האדום", at);
+    text = `${text} ${extraVictim.name} ${extraVictim.gender === "f" ? "נעלמה" : "נעלם"} תחת הירח האדום.`;
+    liveKill(game, extraVictim.id, extraVictim.gender === "f" ? "נעלמה תחת הירח האדום" : "נעלם תחת הירח האדום", at);
   }
 
   const event: DirectorEvent = {
@@ -351,81 +378,94 @@ async function applyDirectorEvent(game: LiveGame, at: number) {
   game.directorEvents.unshift(event);
   game.directorEvents = game.directorEvents.slice(0, 20);
   game.eventLog.push(`במאי: ${event.title}`);
-  announce(game, `✦ ${event.title}: ${text}`);
+  announce(game, `✦ ${event.title}: ${text}`, at, "director");
+  onDirectorEvent(game, event, at);
 }
 
-function applySeerLook(game: LiveGame, seer: Player, targetId: string) {
+function applySeerLook(game: LiveGame, seer: Player, targetId: string, at: number) {
   const t = game.players.find((p) => p.id === targetId);
   if (!t) return;
   const isWolf = t.role === "wolf";
   if (!game.memories[seer.id]) {
-    game.memories[seer.id] = {
-      known: {},
-      messagesToday: 0,
-      lastText: "",
-      plannedVote: null,
-      spokeAtProgress: [],
-    };
+    game.memories[seer.id] = { known: {}, messagesToday: 0, lastText: "", plannedVote: null, spokeAtProgress: [] };
   }
-  game.memories[seer.id]!.known[t.id] = isWolf ? "wolf" : "not_wolf";
+  const m = game.memories[seer.id]!;
+  m.known[t.id] = isWolf ? "wolf" : "not_wolf";
+  m.suspicion ??= {};
+  m.reasons ??= {};
+  m.suspicion[t.id] = isWolf ? 12 : -6;
+  if (isWolf) m.reasons[t.id] = "בדקתי אותו בלילה";
   uniquePush(game, {
     channel: "seer",
     authorId: seer.id,
     authorName: seer.name,
-    text: `${t.name}: ${isWolf ? "זאב" : "לא זאב"}`,
+    text: `${t.name}: ${isWolf ? (t.gender === "f" ? "זאבה" : "זאב") : (t.gender === "f" ? "לא זאבה" : "לא זאב")}`,
     narrator: true,
+    ts: at,
   });
 }
 
-function applyDoctorLog(game: LiveGame, doc: Player, targetId: string) {
+function applyDoctorLog(game: LiveGame, doc: Player, targetId: string, at: number) {
   const t = game.players.find((p) => p.id === targetId);
   uniquePush(game, {
     channel: "doctor",
     authorId: doc.id,
     authorName: doc.name,
-    text: `שומר על ${t?.name ?? "?"} הלילה`,
+    text: `${doc.gender === "f" ? "שומרת" : "שומר"} על ${t?.name ?? "?"} הלילה`,
     narrator: true,
+    ts: at,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Phase transitions
+// ---------------------------------------------------------------------------
 
 function enterDay(game: LiveGame, at: number, dayNumber: number) {
   game.dayNumber = dayNumber;
   game.phase = "day";
   game.openChannel = "public";
   game.votes = {};
+  onNewDay(game, at);
   resetDayTalk(game);
   game.windowStartAt = at;
-  game.nextLockAt = todayDayEnd(at, game.schedule);
-  if (game.nextLockAt <= at) {
-    // safety: if clocks align oddly, lock at next play dayEnd after a full dayStart
-    const nextStart = nextPlayDayStart(at, game.schedule);
-    game.nextLockAt = todayDayEnd(nextStart, game.schedule);
+  if (isQuick(game)) {
+    game.nextLockAt = at + rulesFor(game).quickDayMinutes * MIN;
+  } else {
+    game.nextLockAt = todayDayEnd(at, game.schedule);
+    if (game.nextLockAt <= at) {
+      // Safety: if the clock lands after today's closing time, lock at the next play day's end.
+      const nextStart = nextPlayDayStart(at, game.schedule);
+      game.nextLockAt = todayDayEnd(nextStart, game.schedule);
+    }
   }
   setElapsed(game, at);
-  announce(game, "יום. מדברים, אחר כך מצביעים.");
+  scheduleDay(game, at);
+  const alive = living(game).length;
+  const closing = isQuick(game)
+    ? `בעוד ${rulesFor(game).quickDayMinutes} דקות`
+    : `ב${prettyJerusalem(game.nextLockAt).replace(/^יום \S+ /, "")}`;
+  announce(game, `☀ יום ${dayNumber}. ${alive} בכפר. מדברים, מצביעים, ההצבעה ננעלת ${closing}.`, at, "recap");
 }
 
 function enterNight(game: LiveGame, at: number) {
-  announce(game, "לילה. הזאבים עובדים.");
+  const nightEnd = isQuick(game) ? at + rulesFor(game).quickNightMinutes * MIN : nextPlayDayStart(at, game.schedule);
+  const morning = isQuick(game) ? `בעוד ${rulesFor(game).quickNightMinutes} דקות` : prettyJerusalem(nightEnd);
+  announce(game, `🌙 לילה. הכפר נסגר, הזאבים עובדים. הבוקר ${morning}.`, at, "recap");
   game.night = { wolfTarget: null, seerTarget: null, doctorTarget: null };
   game.phase = "night_wolves";
   game.openChannel = "wolves";
   resetDayTalk(game);
-  const nightEnd = nextPlayDayStart(at, game.schedule);
   const third = Math.max(1, (nightEnd - at) / 3);
   game.nightThirdMs = third;
   game.nightEndAt = nightEnd;
   game.windowStartAt = at;
   game.nextLockAt = at + third;
   setElapsed(game, at);
+  scheduleNight(game, at);
 }
 
-function enterNightStep(
-  game: LiveGame,
-  at: number,
-  phase: "night_seer" | "night_doctor",
-  stepIndex: 1 | 2,
-) {
+function enterNightStep(game: LiveGame, at: number, phase: "night_seer" | "night_doctor") {
   game.phase = phase;
   game.openChannel = openFor(phase);
   game.windowStartAt = at;
@@ -434,34 +474,46 @@ function enterNightStep(
   } else {
     game.nextLockAt = at + (game.nightThirdMs || 0);
   }
+  if (game.nextLockAt <= at) game.nextLockAt = at + MIN;
   setElapsed(game, at);
-  void stepIndex;
+  scheduleNightStep(game, at, phase);
 }
 
 function resolveLiveDay(game: LiveGame, at: number) {
   for (const p of living(game)) {
     if (p.kind === "human" || p.cannotVote) continue;
     if (!game.votes[p.id]) {
-      const t = pickDayVote(game, p);
+      const t = chooseVote(game, p);
       if (t) game.votes[p.id] = t;
     }
   }
   const target = majorityTarget(game);
+  if (target) {
+    const victim = game.players.find((p) => p.id === target);
+    game.lastLynch = {
+      targetId: target,
+      role: victim?.role ?? "villager",
+      voters: Object.entries(game.votes)
+        .filter(([, t]) => t === target)
+        .map(([v]) => v),
+      dayNumber: game.dayNumber,
+    };
+  } else {
+    game.lastLynch = null;
+  }
   for (const p of game.players) {
     p.muted = false;
     p.cannotVote = false;
   }
   if (target) {
-    const name = game.players.find((p) => p.id === target)?.name ?? "";
-    announce(game, `יש רוב. ${name}.`);
-    liveKill(game, target, "נתלה", at);
-    if (checkWin(game)) {
-      game.nextLockAt = at;
-      game.openChannel = "none";
-      return;
-    }
+    const victim = game.players.find((p) => p.id === target);
+    const name = victim?.name ?? "";
+    const count = Object.values(game.votes).filter((t) => t === target).length;
+    announce(game, `ההצבעה ננעלה. ${count} קולות על ${name}. יש רוב.`, at);
+    liveKill(game, target, victim?.gender === "f" ? "נתלתה" : "נתלה", at);
+    if (finishIfWon(game, at)) return;
   } else {
-    announce(game, "אין רוב. אף אחד לא נתלה.");
+    announce(game, "ההצבעה ננעלה בלי רוב. אף אחד לא נתלה הפעם.", at);
   }
   enterNight(game, at);
 }
@@ -471,7 +523,7 @@ function resolveLiveWolves(game: LiveGame, at: number) {
     const agentWolves = living(game).filter((p) => p.role === "wolf" && p.kind !== "human");
     if (agentWolves.length) game.night.wolfTarget = pickWolfKill(game);
   }
-  enterNightStep(game, at, "night_seer", 1);
+  enterNightStep(game, at, "night_seer");
 }
 
 function resolveLiveSeer(game: LiveGame, at: number) {
@@ -480,9 +532,9 @@ function resolveLiveSeer(game: LiveGame, at: number) {
     game.night.seerTarget = pickSeerInspect(game, seer);
   }
   if (seer && game.night.seerTarget && !game.memories[seer.id]?.known[game.night.seerTarget]) {
-    applySeerLook(game, seer, game.night.seerTarget);
+    applySeerLook(game, seer, game.night.seerTarget, at);
   }
-  enterNightStep(game, at, "night_doctor", 2);
+  enterNightStep(game, at, "night_doctor");
 }
 
 async function resolveLiveDoctor(game: LiveGame, at: number) {
@@ -491,7 +543,7 @@ async function resolveLiveDoctor(game: LiveGame, at: number) {
     game.night.doctorTarget = pickDoctorSave(game, doc);
   }
   if (doc && game.night.doctorTarget) {
-    applyDoctorLog(game, doc, game.night.doctorTarget);
+    applyDoctorLog(game, doc, game.night.doctorTarget, at);
   }
   await finishNight(game, at);
 }
@@ -501,40 +553,21 @@ async function finishNight(game: LiveGame, at: number) {
   const saved = Boolean(targetId && targetId === game.night.doctorTarget);
   const target = targetId ? game.players.find((p) => p.id === targetId) : null;
 
-  announce(game, "בוקר.");
-
   if (!target || !targetId) {
     game.lastKill = { playerId: null, name: null, role: null, saved: false };
-    announce(game, "הלילה עבר בלי גופה.");
+    announce(game, "בוקר. הלילה עבר בלי גופה.", at);
   } else if (saved) {
-    game.lastKill = {
-      playerId: target.id,
-      name: target.name,
-      role: target.role,
-      saved: true,
-    };
-    announce(game, "ניסו להרוג. מישהו שמר. נכשל.");
+    game.lastKill = { playerId: target.id, name: target.name, role: target.role, saved: true };
+    announce(game, "בוקר. ניסו להרוג בלילה, ומישהו שמר. ההרג נכשל.", at);
   } else if (target.alive) {
-    game.lastKill = {
-      playerId: target.id,
-      name: target.name,
-      role: target.role,
-      saved: false,
-    };
-    liveKill(game, target.id, "נמצא מת בבוקר", at);
+    game.lastKill = { playerId: target.id, name: target.name, role: target.role, saved: false };
+    announce(game, "בוקר.", at);
+    liveKill(game, target.id, target.gender === "f" ? "נמצאה מתה בבוקר" : "נמצא מת בבוקר", at);
   }
 
-  if (checkWin(game)) {
-    game.nextLockAt = at;
-    game.openChannel = "none";
-    return;
-  }
+  if (finishIfWon(game, at)) return;
   await applyDirectorEvent(game, at);
-  if (checkWin(game)) {
-    game.nextLockAt = at;
-    game.openChannel = "none";
-    return;
-  }
+  if (finishIfWon(game, at)) return;
   enterDay(game, at, game.dayNumber + 1);
 }
 
@@ -561,50 +594,39 @@ async function resolveLiveWindow(game: LiveGame, at: number) {
   }
 }
 
-async function pulseAgents(game: LiveGame) {
-  switch (game.phase) {
-    case "day":
-      await dayPulse(game);
-      break;
-    case "night_wolves":
-      await wolfPulse(game);
-      break;
-    case "night_seer":
-      seerPulse(game);
-      break;
-    case "night_doctor":
-      doctorPulse(game);
-      break;
-    default:
-      break;
-  }
-}
-
-export async function catchUp(game: LiveGame, now = Date.now()): Promise<LiveGame> {
-  if (game.status !== "running" || game.phase === "ended") {
-    game.lastTickAt = now;
-    return game;
-  }
+/**
+ * Bring a game up to `now`: replay the agents' planned actions, close windows
+ * whose time has passed, and let agents act in the current window. Work is
+ * bounded by `budget`; whatever is left over runs on the next request.
+ */
+export async function catchUp(game: LiveGame, now = Date.now(), budget: TickBudget = makeBudget()): Promise<LiveGame> {
+  if (game.status !== "running" || game.phase === "ended") return game;
+  rulesFor(game);
+  ensureAgentState(game);
   let guard = 0;
   while (game.status === "running" && now >= game.nextLockAt && guard < MAX_WINDOW_STEPS) {
     guard += 1;
     const lockAt = game.nextLockAt;
+    const complete = await runAgentEvents(game, lockAt, budget);
+    if (!complete) return game;
     await resolveLiveWindow(game, lockAt);
-    if (game.status !== "running") break;
+    if (game.status !== "running") return game;
   }
-  setElapsed(game, now);
   if (game.status === "running" && now < game.nextLockAt) {
-    if (now - game.lastAgentPulseAt >= PULSE_EVERY_MS) {
-      game.lastAgentPulseAt = now;
-      await pulseAgents(game);
-    }
+    await runAgentEvents(game, now, budget);
   }
   return game;
 }
 
-function nextFakeName(used: string[]): string {
-  const pool = NAME_POOL.filter((n) => !used.includes(n));
-  if (pool.length) return pool[Math.floor(Math.random() * pool.length)]!;
+// ---------------------------------------------------------------------------
+// Names and input cleaning
+// ---------------------------------------------------------------------------
+
+function nextFakeName(used: string[], gender?: Gender): string {
+  const pool = NAMES.filter((n) => !used.includes(n.name));
+  const same = gender ? pool.filter((n) => n.gender === gender) : pool;
+  const from = same.length ? same : pool;
+  if (from.length) return from[Math.floor(Math.random() * from.length)]!.name;
   return `שחקן${used.length + 1}`;
 }
 
@@ -622,11 +644,7 @@ function cleanCode(raw: unknown): string | null {
   return t;
 }
 
-export function parseSchedule(body: {
-  dayStart?: string;
-  dayEnd?: string;
-  days?: number[];
-}): LiveSchedule | { error: string } {
+export function parseSchedule(body: { dayStart?: string; dayEnd?: string; days?: number[] }): LiveSchedule | { error: string } {
   const dayStart = typeof body.dayStart === "string" ? body.dayStart : DEFAULT_SCHEDULE.dayStart;
   const dayEnd = typeof body.dayEnd === "string" ? body.dayEnd : DEFAULT_SCHEDULE.dayEnd;
   if (!HM.test(dayStart) || !HM.test(dayEnd)) {
@@ -652,6 +670,8 @@ function emptyLive(code: string, host: Player, secret: string, schedule: LiveSch
     schedule,
     rules,
     directorEvents: [],
+    remindersSent: [],
+    claims: {},
     startedAt: null,
     secrets: { [host.id]: secret },
     deaths: [],
@@ -686,309 +706,350 @@ function emptyLive(code: string, host: Player, secret: string, schedule: LiveSch
   };
 }
 
+// ---------------------------------------------------------------------------
+// API surface
+// ---------------------------------------------------------------------------
+
 export type ActionResult =
   | { ok: true; game: LiveView | AdminView; me?: { playerId: string; secret: string; fakeName: string } }
   | { ok: false; error: string; status: number };
 
 function viewOf(game: LiveGame, me: Player, now: number, extra?: { playerId: string; secret: string; fakeName: string }): ActionResult {
-  return {
-    ok: true,
-    game: playerView(game, me, now),
-    me: extra,
-  };
+  return { ok: true, game: playerView(game, me, now), me: extra };
 }
 
-export function createLiveGame(input: {
+const NOT_FOUND: ActionResult = { ok: false, error: "אין משחק כזה", status: 404 };
+const UNAUTHORIZED: ActionResult = { ok: false, error: "לא מזוהה", status: 401 };
+
+/**
+ * Load, change and save a game. When another request saved first, the change
+ * is replayed on the fresh state so no player action is silently lost.
+ */
+async function mutate(code: string, fn: (game: LiveGame, now: number) => Promise<ActionResult>, retries = 3): Promise<ActionResult> {
+  for (let attempt = 0; ; attempt++) {
+    const game = await getLive(code);
+    if (!game) return NOT_FOUND;
+    const result = await fn(game, Date.now());
+    if (!result.ok) return result;
+    try {
+      await setLive(game);
+      return result;
+    } catch (error) {
+      if (error instanceof LiveStoreConflictError && attempt < retries) continue;
+      throw error;
+    }
+  }
+}
+
+/** Load a game for reading, advancing it first when nobody else is doing so. */
+async function loadForRead(code: string, secret: string): Promise<{ game: LiveGame; me: Player; now: number } | ActionResult> {
+  let game = await getLive(code);
+  if (!game) return NOT_FOUND;
+  let me = findPlayerBySecret(game, secret);
+  if (!me) return UNAUTHORIZED;
+  const now = Date.now();
+  if (game.status === "running") {
+    const leased = await tryLeaseLive(game.code, LEASE_MS, now);
+    if (leased) {
+      const before = JSON.stringify(game);
+      let saved = false;
+      try {
+        await catchUp(game, now, makeBudget({ maxLlm: 3 }));
+        if (JSON.stringify(game) !== before) {
+          await setLive(game);
+          saved = true;
+        }
+      } catch (error) {
+        if (!(error instanceof LiveStoreConflictError)) throw error;
+        const fresh = await getLive(code);
+        if (fresh) {
+          game = fresh;
+          me = findPlayerBySecret(fresh, secret) ?? me;
+        }
+      } finally {
+        if (!saved) await releaseLeaseLive(game.code);
+      }
+    }
+  }
+  return { game, me, now };
+}
+
+async function advanceForWrite(game: LiveGame, now: number): Promise<ActionResult | null> {
+  if (game.status !== "running") return null;
+  await catchUp(game, now, makeBudget({ maxLlm: 1, maxEvents: 12 }));
+  if (game.status === "running" && now >= game.nextLockAt) {
+    return { ok: false, error: "המשחק מתעדכן, נסה שוב בעוד רגע", status: 409 };
+  }
+  return null;
+}
+
+export async function createLiveGame(input: {
   realName: string;
+  gender?: string;
   dayStart?: string;
   dayEnd?: string;
   days?: number[];
   rules?: Partial<LiveRules>;
-}): ActionResult {
+}): Promise<ActionResult> {
   const realName = cleanName(input.realName);
   if (!realName) return { ok: false, error: "צריך שם", status: 400 };
   const schedule = parseSchedule(input);
   if ("error" in schedule) return { ok: false, error: schedule.error, status: 400 };
   const rules = parseRules(input.rules ?? {});
+  const gender = parseGender(input.gender, realName);
 
-  let code = makeCode();
-  let guard = 0;
-  while (hasLive(code) && guard < 20) {
-    code = makeCode();
-    guard += 1;
-  }
   const secret = makeSecret();
   const host: Player = {
     id: uid("h"),
-    name: publicName(realName, rules, []),
+    name: publicName(realName, gender, rules, []),
     role: "villager",
-    personality: "naive",
+    personality: "chatty",
     alive: true,
     muted: false,
     cannotVote: false,
     kind: "human",
     realName,
     host: true,
+    gender,
   };
-  const game = emptyLive(code, host, secret, schedule, rules);
-  setLive(game);
-  return viewOf(game, host, Date.now(), { playerId: host.id, secret, fakeName: host.name });
+  for (let guard = 0; guard < 20; guard += 1) {
+    const game = emptyLive(makeCode(), host, secret, schedule, rules);
+    try {
+      await setLive(game);
+      return viewOf(game, host, Date.now(), { playerId: host.id, secret, fakeName: host.name });
+    } catch (error) {
+      if (!(error instanceof LiveStoreConflictError)) throw error;
+    }
+  }
+  return { ok: false, error: "לא הצלחנו ליצור קוד משחק, נסה שוב", status: 503 };
 }
 
-export function joinLiveGame(input: { code: string; realName: string; secret?: string }): ActionResult {
+export async function joinLiveGame(input: { code: string; realName: string; gender?: string; secret?: string }): Promise<ActionResult> {
   const code = cleanCode(input.code);
   if (!code) return { ok: false, error: "קוד לא תקין", status: 400 };
-  const game = getLive(code);
-  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
-
-  if (input.secret) {
-    const existing = findPlayerBySecret(game, input.secret);
-    if (existing) return viewOf(game, existing, Date.now());
-  }
-
-  if (game.phase !== "lobby" || game.status !== "idle") {
-    return { ok: false, error: "המשחק כבר רץ", status: 400 };
-  }
-  const rules = rulesFor(game);
-  const humans = game.players.filter((p) => p.kind === "human");
-  if (humans.length >= rules.seats) {
-    return { ok: false, error: "מלא", status: 400 };
-  }
-  const realName = cleanName(input.realName);
-  if (!realName) return { ok: false, error: "צריך שם", status: 400 };
-
-  const secret = makeSecret();
-  const used = game.players.map((p) => p.name);
-  const player: Player = {
-    id: uid("h"),
-    name: publicName(realName, rules, used),
-    role: "villager",
-    personality: "naive",
-    alive: true,
-    muted: false,
-    cannotVote: false,
-    kind: "human",
-    realName,
-    host: false,
-  };
-  game.players.push(player);
-  game.secrets[player.id] = secret;
-  setLive(game);
-  return viewOf(game, player, Date.now(), { playerId: player.id, secret, fakeName: player.name });
+  let created: { playerId: string; secret: string; fakeName: string } | undefined;
+  return mutate(code, async (game, now) => {
+    if (input.secret) {
+      const existing = findPlayerBySecret(game, input.secret);
+      if (existing) {
+        if (game.status === "running") {
+          const busy = await advanceForWrite(game, now);
+          if (busy) return busy;
+        }
+        return viewOf(game, existing, now, { playerId: existing.id, secret: input.secret, fakeName: existing.name });
+      }
+    }
+    if (game.phase !== "lobby") return { ok: false, error: "המשחק כבר התחיל", status: 400 };
+    const rules = rulesFor(game);
+    if (game.players.length >= rules.seats) return { ok: false, error: "מלא", status: 400 };
+    const realName = cleanName(input.realName);
+    if (!realName) return { ok: false, error: "צריך שם", status: 400 };
+    const gender = parseGender(input.gender, realName);
+    const secret = created?.secret ?? makeSecret();
+    const player: Player = {
+      id: created?.playerId ?? uid("p"),
+      name: publicName(realName, gender, rules, game.players.map((p) => p.name)),
+      role: "villager",
+      personality: "chatty",
+      alive: true,
+      muted: false,
+      cannotVote: false,
+      kind: "human",
+      realName,
+      host: false,
+      gender,
+    };
+    created = { playerId: player.id, secret, fakeName: player.name };
+    game.players.push(player);
+    game.secrets[player.id] = secret;
+    return viewOf(game, player, now, created);
+  });
 }
 
 export async function startLiveGame(input: { code: string; secret: string }): Promise<ActionResult> {
   const code = cleanCode(input.code);
-  const game = code ? getLive(code) : null;
-  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
-  const me = findPlayerBySecret(game, input.secret);
-  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
-  if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
-  if (game.phase !== "lobby") return { ok: false, error: "כבר התחיל", status: 400 };
-  const humans = game.players.filter((p) => p.kind === "human");
-  const rules = rulesFor(game);
-  if (rules.botMode === "humans_only" && humans.length < rules.seats) {
-    return { ok: false, error: `במצב ללא בוטים מחכים לכל ${rules.seats} השחקנים`, status: 400 };
-  }
+  if (!code) return NOT_FOUND;
+  return mutate(code, async (game, now) => {
+    const me = findPlayerBySecret(game, input.secret);
+    if (!me) return UNAUTHORIZED;
+    if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+    if (game.phase !== "lobby") return { ok: false, error: "כבר התחיל", status: 400 };
+    const humans = game.players.filter((p) => p.kind === "human");
+    const rules = rulesFor(game);
+    if (rules.botMode === "humans_only" && humans.length < rules.seats) {
+      return { ok: false, error: `במצב ללא בוטים מחכים לכל ${rules.seats} השחקנים`, status: 400 };
+    }
+    if (humans.length < 1) return { ok: false, error: "צריך לפחות שחקן אחד", status: 400 };
 
-  const now = Date.now();
-  const targetCount = rules.botMode === "fill" ? rules.seats : humans.length;
-  const need = Math.max(0, targetCount - game.players.length);
-  const usedNames = game.players.map((p) => p.name);
-  const agentNames = pickNames(Math.max(need, 0), rnd).filter((n) => !usedNames.includes(n));
-  const extra = NAME_POOL.filter((n) => !usedNames.includes(n) && !agentNames.includes(n));
-  const personalities = shuffle([...ALL_PERSONALITIES], rnd);
-  for (let i = 0; i < need; i++) {
-    const name = agentNames[i] ?? extra[i] ?? `שחקן${game.players.length + 1}`;
-    const agent: Player = {
-      id: uid("a"),
-      name,
-      role: "villager",
-      personality: (personalities[i % personalities.length] ?? "quiet") as Personality,
-      alive: true,
-      muted: false,
-      cannotVote: false,
-      kind: "agent",
-      realName: null,
-      host: false,
-    };
-    game.players.push(agent);
-  }
+    const targetCount = rules.botMode === "fill" ? rules.seats : Math.max(humans.length, MIN_LIVE_SEATS);
+    const need = Math.max(0, targetCount - game.players.length);
+    const usedNames = game.players.map((p) => p.name);
+    const agentNames = pickNames(NAME_POOL.length, rnd).filter((n) => !usedNames.includes(n));
+    const personalities = shuffle([...ALL_PERSONALITIES], rnd);
+    for (let i = 0; i < need; i++) {
+      const name = agentNames[i] ?? `שחקן${game.players.length + 1}`;
+      game.players.push({
+        id: uid("a"),
+        name,
+        role: "villager",
+        personality: (personalities[i % personalities.length] ?? "quiet") as Personality,
+        alive: true,
+        muted: false,
+        cannotVote: false,
+        kind: "agent",
+        realName: null,
+        host: false,
+        gender: genderOfName(name),
+      });
+    }
 
-  const roles = shuffle(roleDeck(game.players.length, rules), rnd) as Role[];
-  const pers = shuffle([...ALL_PERSONALITIES], rnd);
-  game.players.forEach((p, i) => {
-    p.role = roles[i] ?? "villager";
-    if (p.kind !== "human") p.personality = pers[i] ?? p.personality;
-    game.memories[p.id] = {
-      known: {},
-      messagesToday: 0,
-      lastText: "",
-      plannedVote: null,
-      spokeAtProgress: [],
-    };
+    const roles = shuffle(roleDeck(game.players.length, rules), rnd) as Role[];
+    const pers = shuffle([...ALL_PERSONALITIES], rnd);
+    game.players.forEach((p, i) => {
+      p.role = roles[i] ?? "villager";
+      if (p.kind !== "human") p.personality = pers[i % pers.length] ?? p.personality;
+      p.gender ??= genderOfName(p.realName ?? p.name);
+      game.memories[p.id] = { known: {}, messagesToday: 0, lastText: "", plannedVote: null, spokeAtProgress: [], suspicion: {}, reasons: {}, saidToday: [] };
+    });
+    ensureAgentState(game);
+
+    const win = initialWindow(game, now);
+    game.startedAt = now;
+    game.status = "running";
+    game.lastAgentPulseAt = now;
+    announce(game, `${game.players.length} שמות סביב השולחן. ${rules.wolfCount} מהם זאבים. הבמאי צופה.`, now);
+
+    if (win.phase === "day") {
+      enterDay(game, now, 1);
+    } else {
+      game.phase = "wait";
+      game.dayNumber = 0;
+      game.windowStartAt = win.windowStartAt;
+      game.nextLockAt = win.nextLockAt;
+      game.waitWeekday = win.waitWeekday;
+      game.openChannel = openFor("wait");
+      setElapsed(game, now);
+      announce(game, `הכפר סגור עכשיו. היום הראשון נפתח ב${prettyJerusalem(win.nextLockAt)}.`, now);
+    }
+
+    await catchUp(game, now, makeBudget({ maxLlm: 2 }));
+    return viewOf(game, me, now);
   });
-
-  const win = initialWindow(now, game.schedule);
-  game.startedAt = now;
-  game.status = "running";
-  game.phase = win.phase;
-  game.dayNumber = win.dayNumber;
-  game.windowStartAt = win.windowStartAt;
-  game.nextLockAt = win.nextLockAt;
-  game.waitWeekday = win.waitWeekday;
-  game.openChannel = openFor(win.phase);
-  game.lastAgentPulseAt = now;
-  setElapsed(game, now);
-
-  announce(game, `${game.players.length} שמות. ${rules.wolfCount} זאבים. הבמאי צופה.`);
-  if (win.phase === "day") {
-    announce(game, "יום. מדברים, אחר כך מצביעים.");
-  } else {
-    announce(game, `היום סגור. החלון ביום ${["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"][win.waitWeekday ?? 0]}.`);
-  }
-
-  await catchUp(game, now);
-  setLive(game);
-  return viewOf(game, me, now);
 }
 
 export async function liveGet(input: { code: string; secret: string }): Promise<ActionResult> {
-  const game = getLive(input.code.trim());
-  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
-  const me = findPlayerBySecret(game, input.secret);
-  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
-  const now = Date.now();
-  if (game.status === "running") {
-    await catchUp(game, now);
-    setLive(game);
-  }
-  return viewOf(game, me, now);
+  const loaded = await loadForRead(input.code.trim(), input.secret);
+  if ("ok" in loaded) return loaded;
+  return viewOf(loaded.game, loaded.me, loaded.now);
+}
+
+export async function liveAdminGet(input: { code: string; secret: string }): Promise<ActionResult> {
+  const loaded = await loadForRead(input.code.trim(), input.secret);
+  if ("ok" in loaded) return loaded;
+  if (loaded.me.id !== loaded.game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+  return { ok: true, game: adminView(loaded.game, loaded.me, loaded.now) };
 }
 
 export async function liveSay(input: { code: string; secret: string; text: string }): Promise<ActionResult> {
-  const game = getLive(input.code.trim());
-  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
-  const me = findPlayerBySecret(game, input.secret);
-  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
-  const now = Date.now();
-  if (game.status === "running") await catchUp(game, now);
+  return mutate(input.code.trim(), async (game, now) => {
+    const me = findPlayerBySecret(game, input.secret);
+    if (!me) return UNAUTHORIZED;
+    const busy = await advanceForWrite(game, now);
+    if (busy) return busy;
 
-  const text = typeof input.text === "string" ? input.text.replace(/\s+/g, " ").trim() : "";
-  if (!text) return { ok: false, error: "ריק", status: 400 };
-  if (text.length > 240) return { ok: false, error: "ארוך מדי", status: 400 };
-  if (!me.alive) return { ok: false, error: "מתים לא כותבים", status: 400 };
-  if (me.muted) return { ok: false, error: "נסתמת היום", status: 400 };
+    const text = typeof input.text === "string" ? input.text.replace(/\s+/g, " ").trim() : "";
+    if (!text) return { ok: false, error: "ריק", status: 400 };
+    if (text.length > 240) return { ok: false, error: "ארוך מדי", status: 400 };
+    if (!me.alive) return { ok: false, error: "מתים לא כותבים", status: 400 };
+    if (me.muted) return { ok: false, error: "נסתמת היום", status: 400 };
 
-  const wolfOk = game.phase === "night_wolves" && me.role === "wolf" && game.openChannel === "wolves";
-  const dayOk = game.phase === "day" && game.openChannel === "public";
-  if (!wolfOk && !dayOk) return { ok: false, error: "הצ'אט סגור עכשיו", status: 400 };
+    const wolfOk = game.phase === "night_wolves" && me.role === "wolf" && game.openChannel === "wolves";
+    const dayOk = game.phase === "day" && game.openChannel === "public";
+    if (!wolfOk && !dayOk) return { ok: false, error: "הצ'אט סגור עכשיו", status: 400 };
 
-  const sent = uniquePush(game, {
-    channel: wolfOk ? "wolves" : "public",
-    authorId: me.id,
-    authorName: me.name,
-    text,
+    const sent = uniquePush(game, {
+      channel: wolfOk ? "wolves" : "public",
+      authorId: me.id,
+      authorName: me.name,
+      text,
+      ts: now,
+    });
+    if (!sent) return { ok: false, error: "ההודעה לא נשלחה", status: 400 };
+    game.lastHumanActionAt = now;
+    if (dayOk) onPublicMessage(game, sent, now);
+    else onWolfMessage(game, sent, now);
+    return viewOf(game, me, now);
   });
-  if (dayOk && sent) {
-    await respondToDirectAddress(game, sent);
-  }
-  setLive(game);
-  return viewOf(game, me, now);
 }
 
 export async function liveVote(input: { code: string; secret: string; targetId: string }): Promise<ActionResult> {
-  const game = getLive(input.code.trim());
-  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
-  const me = findPlayerBySecret(game, input.secret);
-  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
-  const now = Date.now();
-  if (game.status === "running") await catchUp(game, now);
-  if (game.phase !== "day") return { ok: false, error: "אין הצבעה עכשיו", status: 400 };
-  if (!me.alive) return { ok: false, error: "מתים לא מצביעים", status: 400 };
-  if (me.cannotVote) return { ok: false, error: "בלי הצבעה היום", status: 400 };
-  const target = game.players.find((p) => p.id === input.targetId);
-  if (!target?.alive) return { ok: false, error: "על מי", status: 400 };
-  game.votes[me.id] = target.id;
-  setLive(game);
-  return viewOf(game, me, now);
+  return mutate(input.code.trim(), async (game, now) => {
+    const me = findPlayerBySecret(game, input.secret);
+    if (!me) return UNAUTHORIZED;
+    const busy = await advanceForWrite(game, now);
+    if (busy) return busy;
+    if (game.phase !== "day") return { ok: false, error: "לא עכשיו", status: 400 };
+    if (!me.alive) return { ok: false, error: "מתים לא מצביעים", status: 400 };
+    if (me.cannotVote) return { ok: false, error: "אין לך הצבעה היום", status: 400 };
+    const target = game.players.find((p) => p.id === input.targetId);
+    if (!target?.alive) return { ok: false, error: "על מי", status: 400 };
+    if (game.votes[me.id] !== target.id) {
+      game.votes[me.id] = target.id;
+      onVote(game, me, target.id, now);
+    }
+    game.lastHumanActionAt = now;
+    return viewOf(game, me, now);
+  });
 }
 
-export async function liveNightPick(input: {
-  code: string;
-  secret: string;
-  targetId: string;
-}): Promise<ActionResult> {
-  const game = getLive(input.code.trim());
-  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
-  const me = findPlayerBySecret(game, input.secret);
-  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
-  const now = Date.now();
-  if (game.status === "running") await catchUp(game, now);
-  if (!me.alive) return { ok: false, error: "מתים לא בוחרים", status: 400 };
-  const target = game.players.find((p) => p.id === input.targetId);
-  if (!target?.alive) return { ok: false, error: "על מי", status: 400 };
+export async function liveNightPick(input: { code: string; secret: string; targetId: string }): Promise<ActionResult> {
+  return mutate(input.code.trim(), async (game, now) => {
+    const me = findPlayerBySecret(game, input.secret);
+    if (!me) return UNAUTHORIZED;
+    const busy = await advanceForWrite(game, now);
+    if (busy) return busy;
+    if (!me.alive) return { ok: false, error: "מתים לא פועלים", status: 400 };
+    const target = game.players.find((p) => p.id === input.targetId);
+    if (!target?.alive) return { ok: false, error: "על מי", status: 400 };
+    game.lastHumanActionAt = now;
 
-  if (game.phase === "night_wolves" && me.role === "wolf") {
-    if (target.role === "wolf") return { ok: false, error: "לא על הזאבים", status: 400 };
-    game.night.wolfTarget = target.id;
-    setLive(game);
-    return viewOf(game, me, now);
-  }
-  if (game.phase === "night_seer" && me.role === "seer") {
-    if (target.id === me.id) return { ok: false, error: "לא על עצמך", status: 400 };
-    if (game.night.seerTarget && game.night.seerTarget !== target.id) {
-      return { ok: false, error: "כבר בדקת", status: 400 };
+    if (game.phase === "night_wolves" && me.role === "wolf") {
+      if (target.role === "wolf") return { ok: false, error: "לא על הזאבים", status: 400 };
+      game.night.wolfTarget = target.id;
+      return viewOf(game, me, now);
     }
-    if (!game.night.seerTarget) {
+    if (game.phase === "night_seer" && me.role === "seer") {
+      if (target.id === me.id) return { ok: false, error: "לא על עצמך", status: 400 };
+      if (game.night.seerTarget && game.memories[me.id]?.known[game.night.seerTarget]) {
+        return { ok: false, error: "כבר בדקת הלילה", status: 400 };
+      }
       game.night.seerTarget = target.id;
-      applySeerLook(game, me, target.id);
+      applySeerLook(game, me, target.id, now);
+      return viewOf(game, me, now);
     }
-    setLive(game);
-    return viewOf(game, me, now);
-  }
-  if (game.phase === "night_doctor" && me.role === "doctor") {
-    game.night.doctorTarget = target.id;
-    setLive(game);
-    return viewOf(game, me, now);
-  }
-  return { ok: false, error: "לא התור שלך", status: 400 };
+    if (game.phase === "night_doctor" && me.role === "doctor") {
+      game.night.doctorTarget = target.id;
+      return viewOf(game, me, now);
+    }
+    return { ok: false, error: "לא התור שלך", status: 400 };
+  });
 }
 
-export function setLiveSchedule(input: {
+export async function setLiveSchedule(input: {
   code: string;
   secret: string;
   dayStart?: string;
   dayEnd?: string;
   days?: number[];
-}): ActionResult {
-  const game = getLive(input.code.trim());
-  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
-  const me = findPlayerBySecret(game, input.secret);
-  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
-  if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
-  if (game.phase !== "lobby" || game.status !== "idle") {
-    return { ok: false, error: "רק בלובי", status: 400 };
-  }
-  const schedule = parseSchedule(input);
-  if ("error" in schedule) return { ok: false, error: schedule.error, status: 400 };
-  game.schedule = schedule;
-  setLive(game);
-  return { ok: true, game: adminView(game, me, Date.now()) };
+}): Promise<ActionResult> {
+  return mutate(input.code.trim(), async (game, now) => {
+    const me = findPlayerBySecret(game, input.secret);
+    if (!me) return UNAUTHORIZED;
+    if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+    if (game.phase !== "lobby") return { ok: false, error: "אפשר לשנות שעות רק לפני שמתחילים", status: 400 };
+    const schedule = parseSchedule(input);
+    if ("error" in schedule) return { ok: false, error: schedule.error, status: 400 };
+    game.schedule = schedule;
+    return { ok: true, game: adminView(game, me, now) };
+  });
 }
-
-export async function liveAdminGet(input: { code: string; secret: string }): Promise<ActionResult> {
-  const game = getLive(input.code.trim());
-  if (!game) return { ok: false, error: "אין משחק כזה", status: 404 };
-  const me = findPlayerBySecret(game, input.secret);
-  if (!me) return { ok: false, error: "לא מזוהה", status: 401 };
-  if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
-  const now = Date.now();
-  if (game.status === "running") {
-    await catchUp(game, now);
-    setLive(game);
-  }
-  return { ok: true, game: adminView(game, me, now) };
-}
-
-export { todayDayStart, todayDayEnd };

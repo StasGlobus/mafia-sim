@@ -23,7 +23,7 @@ export function townLiving(state: GameState): Player[] {
   return living(state).filter((p) => p.role !== "wolf");
 }
 
-function mem(state: GameState, id: string): AgentMemory {
+export function mem(state: GameState, id: string): AgentMemory {
   if (!state.memories[id]) {
     state.memories[id] = {
       known: {},
@@ -80,6 +80,9 @@ export function uniquePush(
     text: string;
     narrator?: boolean;
     replyToId?: string;
+    tone?: GameState["messages"][number]["tone"];
+    /** Backdated timestamp. The message is inserted in time order. */
+    ts?: number;
   },
 ): GameState["messages"][number] | null {
   const allowed =
@@ -95,14 +98,19 @@ export function uniquePush(
       if (state.usedPublicTexts.length > 80) state.usedPublicTexts.shift();
     }
   }
+  const { ts, ...rest } = msg;
   const saved: GameState["messages"][number] = {
     id: `m${state.messages.length + 1}_${Math.floor(rnd() * 1e6)}`,
-    ts: Date.now(),
-    ...msg,
+    ts: ts ?? Date.now(),
+    ...rest,
   };
-  state.messages.push(saved);
-  if (state.messages.length > 500) {
-    state.messages = state.messages.slice(-400);
+  if (saved.tone === undefined) delete saved.tone;
+  // Keep the log in time order even when an agent line is generated late.
+  let index = state.messages.length;
+  while (index > 0 && state.messages[index - 1]!.ts > saved.ts) index -= 1;
+  state.messages.splice(index, 0, saved);
+  if (state.messages.length > 600) {
+    state.messages = state.messages.slice(-480);
   }
   return saved;
 }
@@ -118,7 +126,7 @@ function normalizedWords(text: string): string[] {
     .map((word) => word.replace(/^@/, ""));
 }
 
-function isDirectlyAddressed(text: string, name: string): boolean {
+export function isDirectlyAddressed(text: string, name: string): boolean {
   const words = normalizedWords(text);
   if (!words.length) return false;
   if (text.includes(`@${name}`)) return true;
@@ -210,13 +218,13 @@ export async function respondToDirectAddress(
   return sendDirectReply(state, agent, message);
 }
 
-function randomTarget(cands: Player[], avoid?: string): Player | null {
+export function randomTarget(cands: Player[], avoid?: string): Player | null {
   const pool = cands.filter((p) => p.id !== avoid);
   if (!pool.length) return null;
   return pick(pool, rnd);
 }
 
-function mentionedNames(state: GameState, players: Player[]): Player[] {
+export function mentionedNames(state: GameState, players: Player[]): Player[] {
   const recent = state.messages.filter((m) => m.channel === "public").slice(-12);
   const scored = players.map((p) => ({
     p,
@@ -226,7 +234,7 @@ function mentionedNames(state: GameState, players: Player[]): Player[] {
   return scored.filter((s) => s.n > 0).map((s) => s.p);
 }
 
-function voteCounts(state: GameState): Record<string, number> {
+export function voteCounts(state: GameState): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const t of Object.values(state.votes)) {
     counts[t] = (counts[t] ?? 0) + 1;
@@ -234,7 +242,7 @@ function voteCounts(state: GameState): Record<string, number> {
   return counts;
 }
 
-function leadingTarget(state: GameState): string | null {
+export function leadingTarget(state: GameState): string | null {
   const counts = voteCounts(state);
   let best: string | null = null;
   let n = 0;
@@ -301,10 +309,17 @@ export function pickDayVote(state: GameState, me: Player): string | null {
   return randomTarget(cands)?.id ?? null;
 }
 
+export function claimedSeer(state: GameState): Player | null {
+  const claims = state.claims ?? {};
+  return living(state).find((p) => claims[p.id] === "seer") ?? null;
+}
+
 export function pickWolfKill(state: GameState): string | null {
   const prey = townLiving(state);
   if (!prey.length) return null;
   if (state.night.wolfTarget && rnd() < 0.7) return state.night.wolfTarget;
+  const seer = claimedSeer(state);
+  if (seer && rnd() < 0.85) return seer.id;
   const yesterday = state.lastKill?.playerId;
   const talked = mentionedNames(state, prey);
   if (talked[0] && rnd() < 0.4) return talked[0].id;
@@ -335,6 +350,8 @@ export function pickSeerInspect(state: GameState, seer: Player): string | null {
 export function pickDoctorSave(state: GameState, doc: Player): string | null {
   const all = living(state);
   if (!all.length) return null;
+  const seer = claimedSeer(state);
+  if (seer && seer.id !== doc.id && rnd() < 0.75) return seer.id;
   if (rnd() < 0.4) return doc.id;
   const talked = mentionedNames(
     state,

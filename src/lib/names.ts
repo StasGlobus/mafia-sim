@@ -1,27 +1,40 @@
-export const NAME_POOL = [
-  "יואב",
-  "נועה",
-  "איתי",
-  "מאיה",
-  "דני",
-  "שירה",
-  "עומר",
-  "תמר",
-  "ליאור",
-  "יעל",
-  "רועי",
-  "הילה",
-  "אביב",
-  "קרן",
-  "עידו",
-  "נטע",
-  "גיא",
-  "מיכל",
-  "אלון",
-  "סתיו",
-  "יובל",
-  "רותם",
+import type { Gender } from "./types";
+
+export const NAMES: { name: string; gender: Gender }[] = [
+  { name: "יואב", gender: "m" },
+  { name: "נועה", gender: "f" },
+  { name: "איתי", gender: "m" },
+  { name: "מאיה", gender: "f" },
+  { name: "דני", gender: "m" },
+  { name: "שירה", gender: "f" },
+  { name: "עומר", gender: "m" },
+  { name: "תמר", gender: "f" },
+  { name: "ליאור", gender: "m" },
+  { name: "יעל", gender: "f" },
+  { name: "רועי", gender: "m" },
+  { name: "הילה", gender: "f" },
+  { name: "אביב", gender: "m" },
+  { name: "קרן", gender: "f" },
+  { name: "עידו", gender: "m" },
+  { name: "נטע", gender: "f" },
+  { name: "גיא", gender: "m" },
+  { name: "מיכל", gender: "f" },
+  { name: "אלון", gender: "m" },
+  { name: "סתיו", gender: "f" },
+  { name: "יובל", gender: "m" },
+  { name: "רותם", gender: "f" },
 ];
+
+export const NAME_POOL = NAMES.map((n) => n.name);
+
+/** Best guess for a name's grammatical gender. Unknown names default to masculine. */
+export function genderOfName(name: string): Gender {
+  const clean = name.trim().split(/\s+/)[0] ?? "";
+  const known = NAMES.find((n) => n.name === clean);
+  if (known) return known.gender;
+  if (/[הת]$/.test(clean) && !/^(משה|יהודה|אריה|שלמה|נחמיה|ירמיה|עובדיה|צביקה|מוטה|אלישע)$/.test(clean)) return "f";
+  return "m";
+}
 
 export function pickNames(n: number, rnd: () => number): string[] {
   const copy = [...NAME_POOL];

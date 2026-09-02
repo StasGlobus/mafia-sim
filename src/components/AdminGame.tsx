@@ -178,8 +178,11 @@ export default function AdminGame({ code }: { code: string }) {
 
   useEffect(() => {
     if (gate !== "admin") return;
+    let ticks = 0;
     const tick = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      ticks += 1;
+      // Background tabs keep the game moving too, just five times slower.
+      if (typeof document !== "undefined" && document.visibilityState === "hidden" && ticks % 5 !== 0) return;
       void refresh();
     };
     const id = setInterval(tick, 2000);
@@ -349,6 +352,14 @@ export default function AdminGame({ code }: { code: string }) {
           {lobby ? (
             <form onSubmit={(e) => void updateSchedule(e)} className="space-y-4">
               <RulesCard view={view} />
+              {view.rules.mode === "quick" ? (
+                <div className="rounded-3xl bg-white/5 p-4">
+                  <div className="font-extrabold">משחק מהיר</div>
+                  <p className="mt-2 text-sm text-dust">
+                    יום של {view.rules.quickDayMinutes} דקות, לילה של {view.rules.quickNightMinutes} דקות. המשחק מתחיל ברגע שלוחצים התחל, אז תאספו את כולם קודם.
+                  </p>
+                </div>
+              ) : (
               <div className="rounded-3xl bg-white/5 p-4">
                 <div className="font-extrabold">שעות וימים</div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
@@ -397,6 +408,7 @@ export default function AdminGame({ code }: { code: string }) {
                   עדכן
                 </button>
               </div>
+              )}
               <button
                 type="button"
                 onClick={() => void start()}
@@ -410,9 +422,11 @@ export default function AdminGame({ code }: { code: string }) {
             <div className="space-y-3">
               <RulesCard view={view} />
               <div className="rounded-3xl bg-white/5 p-4">
-                <div className="font-extrabold">לוח זמנים</div>
+                <div className="font-extrabold">{view.rules.mode === "quick" ? "קצב" : "לוח זמנים"}</div>
                 <p className="mt-2 text-sm text-dust">
-                  {view.schedule.dayStart}–{view.schedule.dayEnd} · ימים {daysLabel(view.schedule.days)}
+                  {view.rules.mode === "quick"
+                    ? `יום ${view.rules.quickDayMinutes} דקות · לילה ${view.rules.quickNightMinutes} דקות`
+                    : `${view.schedule.dayStart}–${view.schedule.dayEnd} · ימים ${daysLabel(view.schedule.days)}`}
                 </p>
                 <p className="mt-2 text-sm">
                   שלב: {view.phaseLabel}
@@ -537,6 +551,7 @@ function RulesCard({ view }: { view: AdminView }) {
         <span className="rounded-full bg-black/20 px-2.5 py-1 text-xs font-bold">במאי AI · {style}</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-dust">
+        <div>{view.rules.mode === "quick" ? "משחק מהיר" : "משחק מתמשך"}</div>
         <div>{view.rules.seats} מקומות · {view.rules.wolfCount} זאבים</div>
         <div>{view.rules.identityMode === "real" ? "שמות אמיתיים" : "שמות בדויים"}</div>
         <div>{view.rules.botMode === "fill" ? "AI משלים מקומות" : "אנשים בלבד"}</div>

@@ -1,5 +1,6 @@
 import type { AdminView, LiveGame, LiveView, Player, Role } from "./types";
 import { DEFAULT_LIVE_RULES, PHASE_HE, ROLE_HE, WEEKDAYS_HE } from "./types";
+import { typingNames } from "./live-agents";
 
 function pad(n: number) {
   return n.toString().padStart(2, "0");
@@ -30,12 +31,14 @@ export function prettyJerusalem(ms: number): string {
   return `יום ${WEEKDAYS_HE[wd]} ${pad(Number(parts.hour))}:${pad(Number(parts.minute))}`;
 }
 
-function deathText(d: LiveGame["deaths"][number]): string {
+function deathText(game: LiveGame, d: LiveGame["deaths"][number]): string {
   const roleHe = ROLE_HE[d.role];
+  const f = game.players.find((p) => p.id === d.playerId)?.gender === "f";
+  const was = f ? "הייתה" : "היה";
   if (d.kind === "human" && d.realName) {
-    return `${d.name} היה ${roleHe}. היה ${d.realName}.`;
+    return `${d.name} ${was} ${roleHe}. ${was} ${d.realName}.`;
   }
-  return `${d.name} היה ${roleHe}. לא היה בן אדם.`;
+  return `${d.name} ${was} ${roleHe}. לא ${was} בן אדם.`;
 }
 
 function entitledChannel(me: Player, channel: string): boolean {
@@ -103,10 +106,11 @@ export function playerView(game: LiveGame, me: Player, now = Date.now()): LiveVi
     const dead = !p.alive;
     let role: Role | null = null;
     if (p.id === me.id && !lobby) role = p.role;
-    else if (dead) role = p.role;
+    else if (dead || ended) role = p.role;
     return {
       id: p.id,
       name: p.name,
+      gender: p.gender ?? "m",
       alive: p.alive,
       isMe: p.id === me.id,
       role,
@@ -145,7 +149,7 @@ export function playerView(game: LiveGame, me: Player, now = Date.now()): LiveVi
       : null,
     deaths: game.deaths.map((d) => ({
       name: d.name,
-      text: deathText(d),
+      text: deathText(game, d),
       role: d.role,
       kind: d.kind,
     })),
@@ -155,10 +159,12 @@ export function playerView(game: LiveGame, me: Player, now = Date.now()): LiveVi
     seats: rules.seats,
     rules,
     directorEvents: game.directorEvents,
+    typing: typingNames(game, me, now),
     me: {
       playerId: me.id,
       fakeName: me.name,
       realName: me.realName ?? "",
+      gender: me.gender ?? "m",
       role: lobby ? null : me.role,
       alive: me.alive,
       muted: me.muted,
@@ -195,6 +201,7 @@ export function adminView(game: LiveGame, me: Player, now = Date.now()): AdminVi
     players: game.players.map((p) => ({
       id: p.id,
       name: p.name,
+      gender: p.gender ?? "m",
       realName: p.kind === "human" ? p.realName ?? null : null,
       kind: p.kind ?? "agent",
       alive: p.alive,

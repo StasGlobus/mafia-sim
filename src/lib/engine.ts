@@ -109,7 +109,7 @@ function enterPhase(state: GameState, phase: Phase) {
   if (phase === "night_doctor") state.night.doctorTarget = null;
 }
 
-export function logEvent(state: GameState, text: string) {
+export function logEvent(state: GameState, text: string, at?: number) {
   state.eventLog.push(`יום ${state.dayNumber}: ${text}`);
   uniquePush(state, {
     channel: "events",
@@ -117,20 +117,22 @@ export function logEvent(state: GameState, text: string) {
     authorName: "מערכת",
     text,
     narrator: true,
+    ts: at,
   });
 }
 
-export function narrator(state: GameState, text: string) {
+export function narrator(state: GameState, text: string, at?: number) {
   uniquePush(state, {
     channel: "public",
     authorId: null,
     authorName: "מערכת",
     text,
     narrator: true,
+    ts: at,
   });
 }
 
-export function checkWin(state: GameState): boolean {
+export function checkWin(state: GameState, at?: number): boolean {
   const alive = living(state);
   const wolves = alive.filter((p) => p.role === "wolf");
   const town = alive.filter((p) => p.role !== "wolf");
@@ -140,8 +142,8 @@ export function checkWin(state: GameState): boolean {
     state.winner = "town";
     state.winnerText = "התושבים ניצחו. הזאבים נתלו.";
     state.openChannel = "none";
-    narrator(state, "התושבים ניצחו.");
-    logEvent(state, "ניצחון תושבים");
+    narrator(state, "התושבים ניצחו. הכפר נקי.", at);
+    logEvent(state, "ניצחון תושבים", at);
     return true;
   }
   if (wolves.length >= town.length) {
@@ -150,8 +152,8 @@ export function checkWin(state: GameState): boolean {
     state.winner = "wolves";
     state.winnerText = "הזאבים ניצחו.";
     state.openChannel = "none";
-    narrator(state, "הזאבים ניצחו. נגמר.");
-    logEvent(state, "ניצחון זאבים");
+    narrator(state, "הזאבים ניצחו. הכפר שלהם עכשיו.", at);
+    logEvent(state, "ניצחון זאבים", at);
     return true;
   }
   return false;

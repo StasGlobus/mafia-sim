@@ -8,9 +8,37 @@ export type SpeakKind =
   | "react_save"
   | "vote"
   | "question"
-  | "panic";
+  | "panic"
+  | "push"
+  | "deflect"
+  | "claim"
+  | "reply"
+  | "reply_back"
+  | "deflect_back"
+  | "wolf_plan"
+  | "wolf_agree";
 
-const BY_PERSONALITY: Record<Personality, Record<SpeakKind, string[]>> = {
+/** Lines every personality can fall back to when it has no bank of its own. */
+const GENERIC: Record<SpeakKind, string[]> = {
+  small: ["מישהו פה בכלל?", "שקט מדי היום", "נו, מה חושבים?"],
+  accuse: ["{t} לא מסתדר לי", "יש לי הרגשה רעה לגבי {t}", "{t}, תסביר את עצמך"],
+  defend: ["עזבו את {t}, זה לא משם", "לא מאמין ש{t} זאב"],
+  react_death: ["{d} הלך. {r}. קשה.", "אז {d} מת. מי הבא?"],
+  react_save: ["מישהו שמר הלילה. כבוד.", "נכשל להם. יש פה רופא טוב."],
+  vote: ["אני על {t}", "מצביע {t}"],
+  question: ["{t}, על מי אתה?", "מי חושב מה על {t}?"],
+  panic: ["רגע, למה אני?", "לא אני. באמת לא."],
+  push: ["נשאר מעט זמן. מי איתי על {t}?", "צריך עוד קולות על {t} לפני הנעילה", "אם לא סוגרים על {t} עכשיו, הלילה יהיה גרוע"],
+  deflect: ["לא אני. תסתכלו על {t}", "מצחיק שדווקא {a} מצביע עליי. {t} הרבה יותר מוזר", "אני תושב. {t} מתחבא מאחורי ההצבעה הזאת"],
+  claim: ["אני הרואה. בדקתי את {t} בלילה. זאב.", "אין לי מה להסתיר: אני הרואה ו{t} זאב."],
+  reply: ["{a}, ראיתי. אני עדיין על {t}", "{a}, כרגע {t} הכי לא מסתדר לי", "{a}, תשובה קצרה: {t}. ותסביר למה אתה שואל"],
+  reply_back: ["{a}, דווקא אתה הכי לא מסתדר לי", "{a}, שאלה טובה. אתה.", "{a}, אם אני חייב שם, זה אתה"],
+  deflect_back: ["לא אני. דווקא אתה, {a}", "{a}, מי שממהר להאשים בדרך כלל מסתיר משהו", "מצחיק שדווקא {a} דוחף עליי. תסתכלו עליו"],
+  wolf_plan: ["יאללה {t} הלילה", "אני על {t}. הוא דוחף חזק", "{t}. ובלי דרמות מחר"],
+  wolf_agree: ["סבבה, {t}", "איתך. {t} וזהו", "אוקי, סוגרים {t}"],
+};
+
+const BY_PERSONALITY: Record<Personality, Partial<Record<SpeakKind, string[]>>> = {
   chatty: {
     small: [
       "וואלה אני חייב לדבר כי השקט הזה הורג אותי",
@@ -309,7 +337,7 @@ export function lineFor(
   vars: Record<string, string>,
   rnd: () => number,
 ): string {
-  const bank = BY_PERSONALITY[personality][kind];
+  const bank = BY_PERSONALITY[personality][kind] ?? GENERIC[kind];
   return fill(pick(bank, rnd), vars);
 }
 
