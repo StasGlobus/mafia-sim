@@ -97,6 +97,11 @@ work or overwrite each other.
    the anon key.
 4. Open `/api/health` and confirm `"store": "supabase", "ok": true`.
 
+`vercel.json` pins the serverless functions to Singapore (`sin1`) because the
+Supabase project lives in `ap-southeast-1`; every poll makes two or three
+database round trips, so keeping the two next to each other matters more than
+being close to the players. Change both together if you move the database.
+
 ## Keeping games alive when nobody is watching
 
 The engine advances on player requests. `GET /api/live/cron` advances every
