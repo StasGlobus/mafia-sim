@@ -1,15 +1,20 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
 
 function saveMe(code: string, me: { playerId: string; secret: string; fakeName: string }) {
   try {
     localStorage.setItem(`mafia-live:${code}`, JSON.stringify(me));
   } catch {
-    /* ignore */
+    /* The secure cookie still keeps the session available. */
   }
+}
+
+function cleanRoomCode(value: string) {
+  return value.replace(/[\s-]/g, "").slice(0, 4);
 }
 
 export default function PlayPage() {
@@ -19,7 +24,9 @@ export default function PlayPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function join() {
+  async function join(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
     setErr(null);
     setBusy(true);
     try {
@@ -33,60 +40,104 @@ export default function PlayPage() {
         game?: { code: string };
         me?: { playerId: string; secret: string; fakeName: string };
       };
-      if (!res.ok || data.error) throw new Error(data.error ?? "לא הלך");
-      if (data.me && data.game) saveMe(data.game.code, data.me);
-      router.push(`/g/${data.game!.code}`);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "לא הלך");
+      if (!res.ok || data.error || !data.game) throw new Error(data.error ?? "לא הצלחנו להיכנס למשחק");
+      if (data.me) saveMe(data.game.code, data.me);
+      router.push(`/g/${data.game.code}`);
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "לא הצלחנו להיכנס למשחק");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col bg-night px-4 py-8 text-paper">
-      <Link href="/" className="text-sm text-dust">
-        ← חזרה
-      </Link>
-      <h1 className="mt-6 text-3xl font-extrabold">נכנסים לשחק</h1>
-      <p className="mt-2 text-dust">שם אמיתי רק אצלך. בכפר כולם עם שם מזויף.</p>
-
-      <label className="mt-8 text-sm text-dust">השם שלך</label>
-      <input
-        className="mt-1 min-h-12 w-full rounded-2xl bg-white/10 px-4 text-base text-paper placeholder:text-dust"
-        placeholder="איך קוראים לך"
-        value={realName}
-        onChange={(e) => setRealName(e.target.value)}
-        autoComplete="name"
-      />
-
-      <div className="mt-8 rounded-3xl bg-white/5 p-4">
-        <div className="font-extrabold">קוד השולחן</div>
-        <div className="mt-3 flex gap-2">
-          <input
-            className="min-h-12 min-w-0 flex-1 rounded-2xl bg-white/10 px-4 text-base tracking-widest text-paper"
-            placeholder="אבג32"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            autoCapitalize="characters"
-          />
-          <button
-            onClick={() => void join()}
-            disabled={busy || !realName.trim() || !code.trim()}
-            className="min-h-12 rounded-2xl bg-paper px-5 font-extrabold text-ink disabled:opacity-40"
-          >
-            הכנס
-          </button>
-        </div>
+    <main className="entry-page relative min-h-dvh overflow-hidden text-paper">
+      <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[48%] lg:block">
+        <Image src="/art/villager.png" alt="" fill sizes="48vw" className="object-cover object-[45%_center] opacity-45" priority />
+        <div className="absolute inset-0 bg-gradient-to-l from-night via-night/45 to-night/10" />
       </div>
 
-      <p className="mt-8 text-center text-sm text-dust">
-        רוצה לפתוח שולחן?{" "}
-        <Link href="/admin" className="font-bold text-paper underline-offset-4 hover:underline">
-          ניהול
-        </Link>
-      </p>
-      {err && <p className="mt-4 text-center text-sm text-red-300">{err}</p>}
-    </div>
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-5 py-5 sm:px-8 lg:px-12 lg:py-8">
+        <header className="flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 rounded-xl text-sm font-bold text-paper/70 transition hover:text-paper">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5" aria-hidden="true">→</span>
+            חזרה לכפר
+          </Link>
+          <Link href="/" className="flex items-center gap-2 text-sm font-black">
+            <Image src="/art/icon.png" alt="" width={32} height={32} className="h-8 w-8 rounded-[10px]" />
+            מאפיה
+          </Link>
+        </header>
+
+        <div className="grid flex-1 items-center gap-12 py-10 lg:grid-cols-2">
+          <section className="max-w-xl">
+            <p className="text-sm font-black text-ember">הצטרפות למשחק</p>
+            <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">הכפר מחכה<br />לזהות החדשה שלך.</h1>
+            <p className="mt-5 max-w-lg text-lg leading-8 text-paper/60">
+              נכנסים עם הקוד שקיבלתם מהמנהל. השם האמיתי נשאר פרטי — במשחק תקבלו שם אחר שאף אחד לא מזהה.
+            </p>
+            <div className="mt-8 hidden gap-3 text-sm text-paper/55 sm:flex">
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">עד 8 שחקנים</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">הבוטים משלימים כיסאות</span>
+            </div>
+          </section>
+
+          <section className="entry-panel rounded-[30px] border border-white/10 p-5 backdrop-blur-xl sm:p-8" aria-labelledby="join-title">
+            <div className="mb-7">
+              <h2 id="join-title" className="text-2xl font-black">כניסה לשולחן</h2>
+              <p className="mt-1 text-sm text-paper/50">שני פרטים — ואתם בפנים.</p>
+            </div>
+
+            <form onSubmit={join} className="space-y-5">
+              <label className="block" htmlFor="real-name">
+                <span className="text-sm font-bold text-paper/75">איך קוראים לך?</span>
+                <input
+                  id="real-name"
+                  className="mt-2 min-h-14 w-full rounded-2xl border border-white/10 bg-black/25 px-4 text-base text-paper placeholder:text-paper/25 transition focus:border-ember/70 focus:bg-black/35 focus:outline-none"
+                  placeholder="השם האמיתי שלך"
+                  value={realName}
+                  onChange={(event) => setRealName(event.target.value.slice(0, 24))}
+                  autoComplete="name"
+                  maxLength={24}
+                  required
+                />
+                <span className="mt-2 block text-xs text-paper/40">רק לך ולמנהל תהיה גישה לשם הזה.</span>
+              </label>
+
+              <label className="block" htmlFor="room-code">
+                <span className="text-sm font-bold text-paper/75">קוד המשחק</span>
+                <input
+                  id="room-code"
+                  className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/25 px-4 text-center font-mono text-2xl font-black tracking-[.32em] text-paper placeholder:text-paper/20 transition focus:border-ember/70 focus:bg-black/35 focus:outline-none"
+                  placeholder="אבג7"
+                  value={code}
+                  onChange={(event) => setCode(cleanRoomCode(event.target.value))}
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={4}
+                  required
+                />
+              </label>
+
+              {err && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{err}</p>}
+
+              <button
+                type="submit"
+                disabled={busy || !realName.trim() || code.length !== 4}
+                className="min-h-16 w-full rounded-2xl bg-paper px-5 text-lg font-black text-ink shadow-[0_14px_35px_rgba(0,0,0,.2)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                {busy ? "נכנסים…" : "קחו אותי לכפר"}
+              </button>
+            </form>
+
+            <div className="mt-6 border-t border-white/10 pt-5 text-center text-sm text-paper/50">
+              אין לכם קוד?{" "}
+              <Link href="/admin" className="font-black text-paper underline decoration-ember/60 underline-offset-4 hover:text-white">פותחים שולחן חדש</Link>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
   );
 }

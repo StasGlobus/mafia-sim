@@ -4,6 +4,9 @@
 
 :root {
   color-scheme: dark;
+  --night: #0b0909;
+  --paper: #f5ead5;
+  --ember: #d84a3d;
 }
 
 html,
@@ -13,10 +16,85 @@ body {
 }
 
 body {
-  background: #120e0c;
-  color: #f3e6cc;
+  margin: 0;
+  background: var(--night);
+  color: var(--paper);
   overscroll-behavior: none;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+
+::selection {
+  background: rgba(216, 74, 61, 0.55);
+  color: white;
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+input:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+}
+
+.landing-hero {
+  object-position: 68% center;
+  transform: scale(1.01);
+  animation: landing-breathe 18s ease-in-out infinite alternate;
+}
+
+.role-card {
+  animation: role-rise 700ms both;
+}
+
+.role-card:nth-child(2) { animation-delay: 80ms; }
+.role-card:nth-child(3) { animation-delay: 160ms; }
+.role-card:nth-child(4) { animation-delay: 240ms; }
+
+.entry-page {
+  background:
+    radial-gradient(circle at 80% -5%, rgba(216, 74, 61, 0.22), transparent 34rem),
+    radial-gradient(circle at -10% 90%, rgba(96, 68, 45, 0.2), transparent 30rem),
+    var(--night);
+}
+
+.entry-panel {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+}
+
+@keyframes landing-breathe {
+  from { transform: scale(1.01); }
+  to { transform: scale(1.045); }
+}
+
+@keyframes role-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; }
+}
+
+@media (max-width: 1023px) {
+  .landing-hero { object-position: 64% top; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 * {

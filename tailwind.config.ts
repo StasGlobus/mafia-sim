@@ -5,16 +5,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        night: "#120e0c",
-        paper: "#f3e6cc",
+        night: "#0b0909",
+        paper: "#f5ead5",
         blood: "#9b2c2c",
+        ember: "#d84a3d",
         moss: "#3d5a3a",
-        dust: "#8a7a64",
+        dust: "#a08f77",
         god: "#1c1714",
         ink: "#1a120c",
       },
       fontFamily: {
-        heebo: ["var(--font-heebo)", "sans-serif"],
+        heebo: ["Arial Hebrew", "Arial", "sans-serif"],
       },
     },
   },
