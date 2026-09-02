@@ -83,7 +83,13 @@ work or overwrite each other.
    ```
 
    This applies `supabase/migrations/*.sql` in order and is safe to rerun.
-   The SQL editor in the dashboard works too if you prefer pasting.
+   The SQL editor in the dashboard works too if you prefer pasting. On a
+   deployment that has the Vercel Supabase integration, the same thing runs
+   from the server without any local setup:
+
+   ```bash
+   curl -X POST https://<your-app>/api/admin/migrate -H "Authorization: Bearer $SUPABASE_SECRET_KEY"
+   ```
 3. Set `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (a `sb_secret_...` key or the
    legacy `service_role` key) in `.env.local` and in Vercel. Never expose them
    to the browser: the state includes roles and player secrets. RLS is on and

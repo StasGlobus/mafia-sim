@@ -259,7 +259,7 @@ function supabaseConfigured(): boolean {
 /** Which storage variables are present (names only, never values). For /api/health. */
 export function storeEnvPresence(): Record<string, boolean> {
   const out: Record<string, boolean> = {};
-  for (const name of [...URL_NAMES, ...SECRET_NAMES, "POSTGRES_URL", "SUPABASE_ANON_KEY", "VERCEL_ENV"]) {
+  for (const name of [...URL_NAMES, ...SECRET_NAMES, "POSTGRES_URL", "POSTGRES_URL_NON_POOLING", "SUPABASE_DB_URL", "SUPABASE_ANON_KEY", "VERCEL_ENV"]) {
     out[name] = Boolean(process.env[name]?.trim());
   }
   return out;
