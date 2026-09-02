@@ -1097,6 +1097,27 @@ export async function liveNightPick(input: { code: string; secret: string; targe
   });
 }
 
+/** The host closes the table early. Every role is revealed so the group can debrief. */
+export async function endLiveGame(input: { code: string; secret: string }): Promise<ActionResult> {
+  return mutate(input.code.trim(), async (game, now) => {
+    const me = findPlayerBySecret(game, input.secret);
+    if (!me) return UNAUTHORIZED;
+    if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+    if (game.status === "ended") return { ok: true, game: adminView(game, me, now) };
+    game.status = "ended";
+    game.phase = "ended";
+    game.openChannel = "none";
+    game.winner = null;
+    game.winnerText = "המנהל סיים את המשחק.";
+    game.nextLockAt = now;
+    announce(game, "המנהל סיים את המשחק לפני הזמן.", now, "alert");
+    endReveal(game, now);
+    game.eventLog.push(`יום ${game.dayNumber}: המנהל סיים את המשחק`);
+    queuePush(game, { kind: "game_over", playerIds: humanIds(game), title: "המשחק נגמר", body: "המנהל סיים את המשחק. הקלפים על השולחן.", tag: "game_over", at: now });
+    return { ok: true, game: adminView(game, me, now) };
+  });
+}
+
 export async function setLiveSchedule(input: {
   code: string;
   secret: string;

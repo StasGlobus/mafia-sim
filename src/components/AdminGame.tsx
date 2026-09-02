@@ -252,6 +252,21 @@ export default function AdminGame({ code }: { code: string }) {
     }
   }
 
+  async function endGame() {
+    if (!identity) return;
+    if (!window.confirm("לסיים את המשחק עכשיו? כל התפקידים ייחשפו לכולם.")) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const data = await liveApi({ action: "end", code, secret: identity.secret, asAdmin: true });
+      applyView(data.game);
+    } catch (er) {
+      setErr(er instanceof Error ? er.message : "לא הלך");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function start() {
     if (!identity) return;
     setBusy(true);
@@ -437,6 +452,16 @@ export default function AdminGame({ code }: { code: string }) {
                 )}
                 {view.waitText && <p className="mt-1 text-sm text-dust">{view.waitText}</p>}
               </div>
+              {running && (
+                <button
+                  type="button"
+                  onClick={() => void endGame()}
+                  disabled={busy}
+                  className="min-h-12 w-full rounded-2xl border border-ember/40 bg-ember/10 font-extrabold text-red-100 disabled:opacity-40"
+                >
+                  לסיים את המשחק ולחשוף את הקלפים
+                </button>
+              )}
             </div>
           )}
 

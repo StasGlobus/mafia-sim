@@ -680,7 +680,11 @@ export default function LiveGame({ code }: { code: string }) {
             </div>
           </div>
           {view.status === "running" && view.nextLockAt && (
-            <div className={`flex h-11 min-w-11 flex-col items-center justify-center rounded-full px-3 ${left < 10 * 60_000 && view.phase === "day" ? "bg-ember" : "bg-blood"}`}>
+            <div
+              className={`flex h-11 min-w-11 flex-col items-center justify-center rounded-full px-3 ${
+                view.phase === "day" && left < (view.rules.mode === "quick" ? 60_000 : 10 * 60_000) ? "bg-ember" : "bg-blood"
+              }`}
+            >
               <div className="text-base font-extrabold tabular-nums leading-none">{fmtRemain(left)}</div>
             </div>
           )}

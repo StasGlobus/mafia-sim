@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import {
   advanceLiveGame,
   createLiveGame,
+  endLiveGame,
   joinLiveGame,
   liveAdminGet,
   liveGet,
@@ -172,6 +173,11 @@ export async function POST(req: NextRequest) {
     if (action === "admin" || (action === "get" && asAdmin)) {
       const result = await liveAdminGet({ code, secret });
       if (result.ok && result.game.status === "running") advanceLater(code);
+      return reply(req, result, code, secret);
+    }
+    if (action === "end") {
+      const result = await endLiveGame({ code, secret });
+      if (result.ok) advanceLater(code);
       return reply(req, result, code, secret);
     }
     if (action === "setSchedule") {
