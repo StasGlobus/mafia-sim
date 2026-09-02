@@ -3,6 +3,26 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let client: SupabaseClient | null = null;
 
+/** Names set by hand or by the Vercel Supabase integration. First non-empty wins. */
+export const SUPABASE_URL_NAMES = ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"] as const;
+export const SUPABASE_SECRET_NAMES = ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY"] as const;
+
+function firstEnv(names: readonly string[]): string | undefined {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
+export function supabaseUrlEnv() {
+  return firstEnv(SUPABASE_URL_NAMES);
+}
+
+export function supabaseSecretEnv() {
+  return firstEnv(SUPABASE_SECRET_NAMES);
+}
+
 /**
  * Returns the server-only Supabase client. This intentionally accepts no
  * browser/public key: game state includes player secrets and roles.
@@ -10,8 +30,8 @@ let client: SupabaseClient | null = null;
 export function supabaseAdmin(): SupabaseClient {
   if (client) return client;
 
-  const rawUrl = process.env.SUPABASE_URL?.trim();
-  const secretKey = (process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
+  const rawUrl = supabaseUrlEnv();
+  const secretKey = supabaseSecretEnv();
 
   if (!rawUrl || !secretKey) {
     throw new Error(

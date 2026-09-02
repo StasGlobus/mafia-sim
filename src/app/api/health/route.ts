@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pingStore } from "@/lib/live-store";
+import { pingStore, storeEnvPresence } from "@/lib/live-store";
 import { llmAvailable } from "@/lib/llm";
 
 export const runtime = "nodejs";
@@ -15,6 +15,8 @@ export async function GET() {
       storeError: store.error ?? null,
       llm: llmAvailable() ? (process.env.OPENAI_API_KEY ? "openai" : "vercel-ai-gateway") : "canned-lines",
       model: process.env.MAFIA_MODEL?.trim() || "gpt-4.1-mini",
+      env: storeEnvPresence(),
+      vercelEnv: process.env.VERCEL_ENV ?? null,
     },
     { status: store.ok ? 200 : 503 },
   );

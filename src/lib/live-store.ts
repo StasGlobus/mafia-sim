@@ -245,10 +245,24 @@ async function supabaseAdapter(): Promise<Adapter> {
 
 let adapterPromise: Promise<Adapter> | null = null;
 
+const URL_NAMES = ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"];
+const SECRET_NAMES = ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY"];
+
+function hasAny(names: string[]) {
+  return names.some((name) => Boolean(process.env[name]?.trim()));
+}
+
 function supabaseConfigured(): boolean {
-  return Boolean(
-    process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),
-  );
+  return hasAny(URL_NAMES) && hasAny(SECRET_NAMES);
+}
+
+/** Which storage variables are present (names only, never values). For /api/health. */
+export function storeEnvPresence(): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const name of [...URL_NAMES, ...SECRET_NAMES, "POSTGRES_URL", "SUPABASE_ANON_KEY", "VERCEL_ENV"]) {
+    out[name] = Boolean(process.env[name]?.trim());
+  }
+  return out;
 }
 
 export function storeKind(): StoreKind {
