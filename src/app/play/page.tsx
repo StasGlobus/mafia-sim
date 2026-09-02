@@ -67,14 +67,14 @@ export default function PlayPage() {
           </Link>
           <Link href="/" className="flex items-center gap-2 text-sm font-black">
             <Image src="/art/icon.png" alt="" width={32} height={32} className="h-8 w-8 rounded-[10px]" />
-            מאפיה
+            AiYara
           </Link>
         </header>
 
         <div className="grid flex-1 items-center gap-12 py-10 lg:grid-cols-2">
           <section className="max-w-xl">
             <p className="text-sm font-black text-ember">הצטרפות למשחק</p>
-            <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">הכפר מחכה<br />לזהות החדשה שלך.</h1>
+            <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">העיירה מחכה<br />לזהות החדשה שלך.</h1>
             <p className="mt-5 max-w-lg text-lg leading-8 text-paper/60">
               נכנסים עם הקוד שקיבלתם מהמנהל. מנהל המשחק קובע אם הכפר משחק בזהויות אמיתיות או בשמות בדויים.
             </p>

@@ -108,14 +108,14 @@ export default function AdminHomePage() {
           </Link>
           <Link href="/" className="flex items-center gap-2 text-sm font-black">
             <Image src="/art/icon.png" alt="" width={32} height={32} className="h-8 w-8 rounded-[10px]" />
-            מאפיה
+            AiYara
           </Link>
         </header>
 
         <div className="grid flex-1 items-center gap-12 py-10 lg:grid-cols-[.8fr_1.2fr]">
           <section className="max-w-lg">
             <p className="text-sm font-black text-ember">ניהול משחק</p>
-            <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">אתם פותחים.<br />הכפר מתעורר.</h1>
+            <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">אתם פותחים.<br />העיירה מתעוררת.</h1>
             <p className="mt-5 text-lg leading-8 text-paper/60">
               אתם קובעים את ההרכב, הזהויות וקצב הכאוס. במאי AI מנהל את הלילה ושומר שכל משחק יתפתח אחרת.
             </p>
@@ -195,7 +195,7 @@ export default function AdminHomePage() {
                       </select>
                     </label>
                   </div>
-                  <p className="mt-2 text-xs leading-5 text-paper/40">הבוטים מדברים בקצב של קבוצה חיה. משחק של 8 שחקנים נגמר בדרך כלל תוך 30–50 דקות.</p>
+                  <p className="mt-2 text-xs leading-5 text-paper/40">הבוטים מדברים בקצב של קבוצה חיה. שולחן של 8 עם יום של 8 דקות נגמר בדרך כלל תוך 30–50 דקות.</p>
                 </fieldset>
               )}
 

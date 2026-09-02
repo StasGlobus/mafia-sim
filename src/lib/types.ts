@@ -294,6 +294,23 @@ export interface LiveGame extends GameState {
   directorEvents: DirectorEvent[];
   remindersSent?: string[];
   lastHumanActionAt?: number;
+  /** Notifications waiting for the background pass to deliver. */
+  pushOutbox?: PushEvent[];
+  /** Last delivery per "playerId:kind", for cooldowns. */
+  pushLastAt?: Record<string, number>;
+}
+
+export type PushKind = "vote_against" | "mention" | "morning" | "night" | "your_turn" | "deadline" | "lynch" | "game_over";
+
+export interface PushEvent {
+  id: string;
+  kind: PushKind;
+  playerIds: string[];
+  title: string;
+  body: string;
+  tag: string;
+  url: string;
+  ts: number;
 }
 
 export interface LiveMeView {

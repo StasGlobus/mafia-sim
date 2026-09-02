@@ -31,6 +31,13 @@ export class LiveStoreUnavailableError extends Error {
   }
 }
 
+export interface PushSubscriptionRow {
+  endpoint: string;
+  gameCode: string;
+  playerId: string;
+  subscription: unknown;
+}
+
 interface Adapter {
   kind: StoreKind;
   get(code: string): Promise<{ game: LiveGame; version: number } | null>;
@@ -40,6 +47,11 @@ interface Adapter {
   releaseLease(code: string): Promise<void>;
   listRunning(): Promise<string[]>;
   ping(): Promise<void>;
+  getSetting(key: string): Promise<unknown | null>;
+  setSetting(key: string, value: unknown): Promise<void>;
+  savePushSubscription(row: PushSubscriptionRow): Promise<void>;
+  listPushSubscriptions(gameCode: string, playerIds: string[]): Promise<PushSubscriptionRow[]>;
+  deletePushSubscription(endpoint: string): Promise<void>;
 }
 
 const versions = new WeakMap<LiveGame, number>();
@@ -67,6 +79,8 @@ interface MemoryRow {
 
 function memoryAdapter(): Adapter {
   const rows = new Map<string, MemoryRow>();
+  const settings = new Map<string, unknown>();
+  const subs = new Map<string, PushSubscriptionRow>();
   let loaded = false;
 
   function load() {
@@ -74,10 +88,19 @@ function memoryAdapter(): Adapter {
     loaded = true;
     try {
       const raw = fs.readFileSync(MEMORY_FILE, "utf8");
-      const parsed = JSON.parse(raw) as Record<string, { json?: string; version?: number } | LiveGame>;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
       for (const [code, row] of Object.entries(parsed)) {
-        if (row && typeof row === "object" && "json" in row && typeof row.json === "string") {
-          rows.set(key(code), { json: row.json, version: Number(row.version ?? 1), leaseUntil: 0 });
+        if (code === "__settings" && row && typeof row === "object") {
+          for (const [k, v] of Object.entries(row as Record<string, unknown>)) settings.set(k, v);
+          continue;
+        }
+        if (code === "__push" && Array.isArray(row)) {
+          for (const r of row as PushSubscriptionRow[]) subs.set(r.endpoint, r);
+          continue;
+        }
+        if (row && typeof row === "object" && "json" in row && typeof (row as { json?: unknown }).json === "string") {
+          const r = row as { json: string; version?: number };
+          rows.set(key(code), { json: r.json, version: Number(r.version ?? 1), leaseUntil: 0 });
         } else if (row && typeof row === "object") {
           // Older files stored the game object directly.
           rows.set(key(code), { json: JSON.stringify(row), version: 1, leaseUntil: 0 });
@@ -90,8 +113,10 @@ function memoryAdapter(): Adapter {
 
   function persist() {
     try {
-      const out: Record<string, { json: string; version: number }> = {};
+      const out: Record<string, unknown> = {};
       for (const [code, row] of rows) out[code] = { json: row.json, version: row.version };
+      out.__settings = Object.fromEntries(settings);
+      out.__push = [...subs.values()];
       fs.writeFileSync(MEMORY_FILE, JSON.stringify(out));
     } catch {
       /* /tmp may be missing; memory still holds the state */
@@ -150,6 +175,29 @@ function memoryAdapter(): Adapter {
     },
     async ping() {
       load();
+    },
+    async getSetting(k) {
+      load();
+      return settings.has(k) ? settings.get(k)! : null;
+    },
+    async setSetting(k, value) {
+      load();
+      settings.set(k, value);
+      persist();
+    },
+    async savePushSubscription(row) {
+      load();
+      subs.set(row.endpoint, row);
+      persist();
+    },
+    async listPushSubscriptions(gameCode, playerIds) {
+      load();
+      return [...subs.values()].filter((r) => r.gameCode === key(gameCode) && playerIds.includes(r.playerId));
+    },
+    async deletePushSubscription(endpoint) {
+      load();
+      subs.delete(endpoint);
+      persist();
     },
   };
 }
@@ -235,6 +283,34 @@ async function supabaseAdapter(): Promise<Adapter> {
     async ping() {
       const { error } = await table().select("code", { count: "exact", head: true });
       if (error) throw unavailable(error);
+    },
+    async getSetting(k) {
+      const { data, error } = await supabaseAdmin().from("app_settings").select("value").eq("key", k).maybeSingle();
+      if (error) throw unavailable(error);
+      return data ? data.value : null;
+    },
+    async setSetting(k, value) {
+      const { error } = await supabaseAdmin().from("app_settings").upsert({ key: k, value, updated_at: new Date().toISOString() });
+      if (error) throw unavailable(error);
+    },
+    async savePushSubscription(row) {
+      const { error } = await supabaseAdmin()
+        .from("push_subscriptions")
+        .upsert({ endpoint: row.endpoint, game_code: key(row.gameCode), player_id: row.playerId, subscription: row.subscription });
+      if (error) throw unavailable(error);
+    },
+    async listPushSubscriptions(gameCode, playerIds) {
+      if (!playerIds.length) return [];
+      const { data, error } = await supabaseAdmin()
+        .from("push_subscriptions")
+        .select("endpoint, game_code, player_id, subscription")
+        .eq("game_code", key(gameCode))
+        .in("player_id", playerIds);
+      if (error) throw unavailable(error);
+      return (data ?? []).map((r) => ({ endpoint: String(r.endpoint), gameCode: String(r.game_code), playerId: String(r.player_id), subscription: r.subscription }));
+    },
+    async deletePushSubscription(endpoint) {
+      await supabaseAdmin().from("push_subscriptions").delete().eq("endpoint", endpoint);
     },
   };
 }
@@ -343,6 +419,26 @@ export async function listRunningLive(): Promise<string[]> {
   } catch (error) {
     throw unavailable(error);
   }
+}
+
+export async function getSetting(k: string): Promise<unknown | null> {
+  return (await adapter()).getSetting(k);
+}
+
+export async function setSetting(k: string, value: unknown): Promise<void> {
+  await (await adapter()).setSetting(k, value);
+}
+
+export async function savePushSubscription(row: PushSubscriptionRow): Promise<void> {
+  await (await adapter()).savePushSubscription(row);
+}
+
+export async function listPushSubscriptions(gameCode: string, playerIds: string[]): Promise<PushSubscriptionRow[]> {
+  return (await adapter()).listPushSubscriptions(gameCode, playerIds);
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  await (await adapter()).deletePushSubscription(endpoint);
 }
 
 export async function pingStore(): Promise<{ kind: StoreKind; ok: boolean; error?: string }> {

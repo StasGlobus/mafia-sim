@@ -161,7 +161,7 @@ export default function Simulator() {
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 px-3 py-2 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-base font-extrabold leading-tight">מאפיה</div>
+            <div className="text-base font-extrabold leading-tight">AiYara · סימולטור</div>
             {state.status !== "idle" ? (
               <div className="truncate text-xs text-dust">
                 יום {state.dayNumber} · {phaseHint(state.phase)}

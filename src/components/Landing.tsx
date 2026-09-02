@@ -51,8 +51,8 @@ export default function Landing() {
           <Link href="/" className="group flex items-center gap-3 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ember">
             <Image src="/art/icon.png" alt="" width={48} height={48} className="h-11 w-11 rounded-[14px] object-cover ring-1 ring-white/15 transition-transform group-hover:scale-105" />
             <div>
-              <div className="text-lg font-black leading-none tracking-tight">מאפיה</div>
-              <div className="mt-1 text-[11px] font-medium tracking-[.18em] text-paper/55">הכפר לא נרדם</div>
+              <div className="text-lg font-black leading-none tracking-tight">AiYara</div>
+              <div className="mt-1 text-[11px] font-medium tracking-[.18em] text-paper/55">העיירה לא נרדמת</div>
             </div>
           </Link>
           <Link href="/sim" className="hidden items-center gap-2 rounded-full border border-white/15 bg-black/25 px-4 py-2.5 text-sm font-bold text-paper/75 backdrop-blur transition hover:border-white/30 hover:bg-white/10 hover:text-paper sm:flex">
@@ -68,15 +68,15 @@ export default function Landing() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
               </span>
-              משחק חברתי ל־1–8 שחקנים
+              משחק חברתי ל־5–12 שחקנים, אנשים ובוטים
             </div>
             <h1 className="max-w-xl text-5xl font-black leading-[.96] tracking-[-.045em] sm:text-7xl lg:text-[5.4rem]">
-              מי בכפר
+              מי בעיירה
               <br />
               <span className="text-ember">מסתיר שיניים?</span>
             </h1>
             <p className="mt-6 max-w-xl text-lg font-medium leading-8 text-paper/72 sm:text-xl">
-              משחק מאפיה מתמשך בעברית. מדברים ביום, פועלים בלילה — והבוטים החכמים ממלאים כל כיסא שנשאר ריק.
+              מאפיה בעברית, בקצב שלכם: משחק מהיר של חצי שעה או עיירה שחיה ימים. מדברים ביום, פועלים בלילה, ושחקני AI ממלאים כל כיסא שנשאר ריק.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:max-w-xl sm:flex-row">
@@ -93,7 +93,7 @@ export default function Landing() {
             <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-paper/50">
               <span>בלי הורדה</span><span className="h-1 w-1 rounded-full bg-paper/25" />
               <span>שם סודי לכל שחקן</span><span className="h-1 w-1 rounded-full bg-paper/25" />
-              <span>מתאים גם לשחקן יחיד</span>
+              <span>עובד גם לבד מול הבוטים</span>
             </div>
           </div>
 
@@ -116,7 +116,7 @@ export default function Landing() {
 
         <section className="grid gap-2 border-t border-white/10 pt-5 sm:grid-cols-3" aria-label="איך משחקים">
           {[
-            ["01", "נכנסים בסוד", "מקבלים זהות אחרת בכפר."],
+            ["01", "נכנסים בסוד", "מקבלים זהות אחרת בעיירה."],
             ["02", "מדברים ומצביעים", "רוב מחליט מי יוצא מהמשחק."],
             ["03", "שורדים את הלילה", "הזאבים צדים. בעלי התפקידים פועלים."],
           ].map(([n, title, detail]) => (

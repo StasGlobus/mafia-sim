@@ -71,9 +71,16 @@ async function main() {
   let dayOneLock = game.nextLockAt;
   const host = game.players.find((p) => p.host)!;
 
-  for (let step = 0; step < 400 && game.status === "running"; step++) {
+  const transitions: string[] = [];
+  let lastKey = "";
+  for (let step = 0; step < 900 && game.status === "running"; step++) {
     t += 15_000;
     await live.catchUp(game, t, agents.makeBudget({ maxLlm: 0, maxEvents: 60 }));
+    const key = `${game.phase}/day${game.dayNumber}/alive${game.players.filter((p) => p.alive).length}`;
+    if (key !== lastKey) {
+      transitions.push(`${Math.round((t - start) / 60_000)}m ${key}`);
+      lastKey = key;
+    }
     if (!humanAskedAt && game.phase === "day" && game.dayNumber === 1 && t > start + 60_000 && host.alive) {
       const target = game.players.find((p) => p.kind === "agent" && p.alive)!;
       const msg = uniquePush(game, { channel: "public", authorId: host.id, authorName: host.name, text: `${target.name}, על מי אתה חושד?`, ts: t })!;
@@ -99,7 +106,8 @@ async function main() {
   assert(replySeenAt > 0 && replySeenAt - humanAskedAt <= 60_000, `an addressed agent answered within ${Math.round((replySeenAt - humanAskedAt) / 1000)}s`);
   assert(game.dayNumber >= 2 || game.status === "ended", "the game advanced past day 1");
   assert(game.deaths.length >= 1, "someone died");
-  assert(game.status === "ended", `the game ended (${game.winnerText})`);
+  if (game.status !== "ended") console.log("transitions:\n  " + transitions.join("\n  "));
+  assert(game.status === "ended", `the game ended within ${Math.round((t - start) / 60_000)} simulated minutes (${game.winnerText})`);
   const reveal = game.messages.find((m) => m.tone === "reveal");
   assert(Boolean(reveal), "roles were revealed at the end");
 

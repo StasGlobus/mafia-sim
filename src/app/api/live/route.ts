@@ -12,7 +12,8 @@ import {
   startLiveGame,
   type ActionResult,
 } from "@/lib/live";
-import { getLive, LiveStoreConflictError, LiveStoreUnavailableError } from "@/lib/live-store";
+import { deletePushSubscription, getLive, LiveStoreConflictError, LiveStoreUnavailableError, savePushSubscription } from "@/lib/live-store";
+import { findPlayerBySecret } from "@/lib/live";
 import type { LiveRules } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -151,6 +152,22 @@ export async function POST(req: NextRequest) {
     if (!secret) return NextResponse.json({ error: "חסר מפתח" }, { status: 401 });
 
     const asAdmin = body.asAdmin === true;
+
+    if (action === "pushSubscribe" || action === "pushUnsubscribe") {
+      const game = await getLive(code);
+      if (!game) return NextResponse.json({ error: "אין משחק כזה" }, { status: 404 });
+      const me = findPlayerBySecret(game, secret);
+      if (!me) return NextResponse.json({ error: "לא מזוהה" }, { status: 401 });
+      const sub = body.subscription as { endpoint?: unknown } | undefined;
+      const endpoint = typeof sub?.endpoint === "string" ? sub.endpoint : typeof body.endpoint === "string" ? body.endpoint : "";
+      if (!endpoint || !/^https:\/\//.test(endpoint)) return NextResponse.json({ error: "מנוי לא תקין" }, { status: 400 });
+      if (action === "pushUnsubscribe") {
+        await deletePushSubscription(endpoint);
+        return NextResponse.json({ ok: true });
+      }
+      await savePushSubscription({ endpoint, gameCode: game.code, playerId: me.id, subscription: sub });
+      return NextResponse.json({ ok: true });
+    }
 
     if (action === "admin" || (action === "get" && asAdmin)) {
       const result = await liveAdminGet({ code, secret });

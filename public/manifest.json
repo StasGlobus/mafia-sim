@@ -1,6 +1,7 @@
 {
-  "name": "מאפיה",
-  "short_name": "מאפיה",
+  "name": "AiYara",
+  "short_name": "AiYara",
+  "description": "עיירה, זאבים ובוטים. מאפיה בעברית ל־5–12 שחקנים.",
   "start_url": "/",
   "display": "standalone",
   "dir": "rtl",
@@ -9,10 +10,22 @@
   "theme_color": "#0b0909",
   "icons": [
     {
-      "src": "/art/icon.png",
+      "src": "/art/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/art/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/art/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

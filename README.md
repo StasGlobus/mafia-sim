@@ -1,6 +1,6 @@
-# Mafia
+# AiYara
 
-A Hebrew, RTL, AI-assisted Mafia/Werewolf game built with Next.js App Router.
+AiYara (עיירה + AI) is a Hebrew, RTL, AI-assisted Mafia/Werewolf game built with Next.js App Router.
 Humans and AI agents share one village chat; the agents talk, accuse, defend,
 vote and lie at the pace of a real group chat.
 
@@ -106,6 +106,16 @@ work or overwrite each other.
 Supabase project lives in `ap-southeast-1`; every poll makes two or three
 database round trips, so keeping the two next to each other matters more than
 being close to the players. Change both together if you move the database.
+
+## Push notifications
+
+Players can opt in (a banner in the chat, or the "אני" tab) and get a web push
+when someone addresses them, votes against them, when a day opens, when their
+role's night turn comes, before the vote locks, and when the game ends. The
+service worker is `public/sw.js`; it stays quiet when the game tab is focused.
+The VAPID key pair is generated on first use and stored in `app_settings`, so
+no environment variables are needed. On iPhone, push works only after the site
+is added to the home screen; the app tells players so.
 
 ## Keeping games alive when nobody is watching
 

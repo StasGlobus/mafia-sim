@@ -17,6 +17,7 @@ import {
 } from "./agents";
 import { lineFor, type SpeakKind } from "./phrases";
 import { generateAgentLine, llmAvailable } from "./llm";
+import { queuePush } from "./push";
 
 /**
  * Agent behaviour for live games.
@@ -461,6 +462,16 @@ export function onPublicMessage(game: LiveGame, msg: ChatMessage, at: number) {
   const accusatory = ACCUSATORY.test(msg.text);
   const named = mentioned(game, msg.text, author ? [author.id] : []);
   const scale = reactionScale(game);
+  for (const h of named.filter((p) => p.kind === "human" && p.alive)) {
+    queuePush(game, {
+      kind: "mention",
+      playerIds: [h.id],
+      title: `${msg.authorName} בעיירה`,
+      body: msg.text,
+      tag: `mention-${h.id}`,
+      at,
+    });
+  }
   for (const a of agentsAlive(game)) {
     if (a.id === author?.id) continue;
     const talk = TALK[a.personality];
@@ -505,6 +516,18 @@ export function onWolfMessage(game: LiveGame, msg: ChatMessage, at: number) {
 export function onVote(game: LiveGame, voter: Player, targetId: string, at: number) {
   ensureAgentState(game);
   if (voter.kind === "human") game.lastHumanActionAt = at;
+  const target = byId(game, targetId);
+  if (target?.kind === "human" && target.alive && voter.id !== target.id) {
+    const count = Object.values(game.votes).filter((t) => t === targetId).length;
+    queuePush(game, {
+      kind: "vote_against",
+      playerIds: [target.id],
+      title: `${voter.name} ${voter.gender === "f" ? "הצביעה" : "הצביע"} נגדך`,
+      body: `${count} ${count === 1 ? "קול" : "קולות"} עליך, צריך ${majorityNeed(game)} לרוב. ${minutesLeft(game, at)} דקות לנעילה.`,
+      tag: `vote-${game.dayNumber}-${target.id}`,
+      at,
+    });
+  }
   const scale = reactionScale(game);
   for (const a of agentsAlive(game)) {
     if (a.id === voter.id) continue;
@@ -1028,6 +1051,10 @@ function runReminder(game: LiveGame, key: string, at: number) {
     }
   }
   uniquePush(game, { channel: "public", authorId: null, authorName: "מערכת", text, narrator: true, tone: "alert", ts: at });
+  const undecided = living(game)
+    .filter((p) => p.kind === "human" && !p.cannotVote && !game.votes[p.id])
+    .map((p) => p.id);
+  queuePush(game, { kind: "deadline", playerIds: undecided, title: `${leftText} להצבעה`, body: text, tag: `deadline-${game.dayNumber}`, at });
 }
 
 /**

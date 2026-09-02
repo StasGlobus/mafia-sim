@@ -29,6 +29,7 @@ import { living, pickDoctorSave, pickSeerInspect, pickWolfKill, resetDayTalk, un
 import { getLive, LiveStoreConflictError, releaseLeaseLive, setLive, tryLeaseLive } from "./live-store";
 import { adminView, playerView, prettyJerusalem } from "./view";
 import { chooseDirectorEvent } from "./director";
+import { flushPushOutbox, queuePush } from "./push";
 import {
   chooseVote,
   endReveal,
@@ -313,11 +314,16 @@ function liveKill(game: LiveGame, id: string, how: string, at: number) {
   game.eventLog.push(`יום ${game.dayNumber}: ${p.name} מת (${roleHe})`);
 }
 
+function humanIds(game: LiveGame, onlyAlive = false): string[] {
+  return game.players.filter((p) => p.kind === "human" && (!onlyAlive || p.alive)).map((p) => p.id);
+}
+
 function finishIfWon(game: LiveGame, at: number): boolean {
   if (!checkWin(game, at)) return false;
   endReveal(game, at);
   game.nextLockAt = at;
   game.openChannel = "none";
+  queuePush(game, { kind: "game_over", playerIds: humanIds(game), title: "המשחק נגמר", body: game.winnerText || "הקלפים על השולחן.", tag: "game_over", at });
   return true;
 }
 
@@ -446,6 +452,15 @@ function enterDay(game: LiveGame, at: number, dayNumber: number) {
     ? `בעוד ${rulesFor(game).quickDayMinutes} דקות`
     : `ב${prettyJerusalem(game.nextLockAt).replace(/^יום \S+ /, "")}`;
   announce(game, `☀ יום ${dayNumber}. ${alive} בכפר. מדברים, מצביעים, ההצבעה ננעלת ${closing}.`, at, "recap");
+  if (dayNumber > 1) {
+    const kill = game.lastKill;
+    const body = kill?.saved
+      ? "ניסו להרוג בלילה ומישהו שמר. כולם חיים."
+      : kill?.name
+        ? `${kill.name} ${game.players.find((p) => p.id === kill.playerId)?.gender === "f" ? "נמצאה מתה" : "נמצא מת"}. ${kill.role ? `${game.players.find((p) => p.id === kill.playerId)?.gender === "f" ? "הייתה" : "היה"} ${ROLE_HE[kill.role]}.` : ""} ${alive} נשארו.`
+        : `הלילה עבר בלי גופה. ${alive} בכפר.`;
+    queuePush(game, { kind: "morning", playerIds: humanIds(game), title: `☀ יום ${dayNumber} ב-AiYara`, body: `${body} ההצבעה ננעלת ${closing}.`, tag: `morning-${dayNumber}`, at });
+  }
 }
 
 function enterNight(game: LiveGame, at: number) {
@@ -463,6 +478,14 @@ function enterNight(game: LiveGame, at: number) {
   game.nextLockAt = at + third;
   setElapsed(game, at);
   scheduleNight(game, at);
+  const wolves = game.players.filter((p) => p.kind === "human" && p.alive && p.role === "wolf").map((p) => p.id);
+  if (wolves.length) {
+    queuePush(game, { kind: "your_turn", playerIds: wolves, title: "🌙 התור שלך", body: "הלילה ירד. בחר מי לא יתעורר בבוקר.", tag: `turn-${game.dayNumber}-wolf`, at });
+  }
+  if (!isQuick(game)) {
+    const others = humanIds(game).filter((id) => !wolves.includes(id));
+    queuePush(game, { kind: "night", playerIds: others, title: "🌙 לילה בעיירה", body: `הכפר נסגר. הבוקר ${morning}.`, tag: `night-${game.dayNumber}`, at });
+  }
 }
 
 function enterNightStep(game: LiveGame, at: number, phase: "night_seer" | "night_doctor") {
@@ -477,6 +500,19 @@ function enterNightStep(game: LiveGame, at: number, phase: "night_seer" | "night
   if (game.nextLockAt <= at) game.nextLockAt = at + MIN;
   setElapsed(game, at);
   scheduleNightStep(game, at, phase);
+  const role = phase === "night_seer" ? "seer" : "doctor";
+  const actor = game.players.find((p) => p.kind === "human" && p.alive && p.role === role);
+  if (actor) {
+    const f = actor.gender === "f";
+    queuePush(game, {
+      kind: "your_turn",
+      playerIds: [actor.id],
+      title: role === "seer" ? "🔮 התור שלך" : "🩺 התור שלך",
+      body: role === "seer" ? `${f ? "בחרי" : "בחר"} מי לבדוק הלילה.` : `${f ? "בחרי" : "בחר"} על מי לשמור הלילה.`,
+      tag: `turn-${game.dayNumber}-${role}`,
+      at,
+    });
+  }
 }
 
 function resolveLiveDay(game: LiveGame, at: number) {
@@ -511,9 +547,18 @@ function resolveLiveDay(game: LiveGame, at: number) {
     const count = Object.values(game.votes).filter((t) => t === target).length;
     announce(game, `ההצבעה ננעלה. ${count} קולות על ${name}. יש רוב.`, at);
     liveKill(game, target, victim?.gender === "f" ? "נתלתה" : "נתלה", at);
+    queuePush(game, {
+      kind: "lynch",
+      playerIds: humanIds(game),
+      title: "ההצבעה ננעלה",
+      body: `${name} ${victim?.gender === "f" ? "נתלתה. הייתה" : "נתלה. היה"} ${ROLE_HE[victim?.role ?? "villager"]}.`,
+      tag: `lynch-${game.dayNumber}`,
+      at,
+    });
     if (finishIfWon(game, at)) return;
   } else {
     announce(game, "ההצבעה ננעלה בלי רוב. אף אחד לא נתלה הפעם.", at);
+    queuePush(game, { kind: "lynch", playerIds: humanIds(game), title: "ההצבעה ננעלה", body: "אין רוב. אף אחד לא נתלה, והלילה מגיע.", tag: `lynch-${game.dayNumber}`, at });
   }
   enterNight(game, at);
 }
@@ -769,9 +814,11 @@ export async function advanceLiveGame(code: string, budget: TickBudget = makeBud
   let saved = false;
   try {
     const game = await getLive(clean);
-    if (!game || game.status !== "running") return;
+    if (!game) return;
     const before = JSON.stringify(game);
-    await catchUp(game, now, budget);
+    if (game.status === "running") await catchUp(game, now, budget);
+    // Deliver notifications queued by this pass or by a player's action just before it.
+    await flushPushOutbox(game);
     if (JSON.stringify(game) !== before) {
       await setLive(game);
       saved = true;

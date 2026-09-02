@@ -142,6 +142,27 @@ function nightReminder(role: LiveView["me"]["role"], gender: Gender): string {
   }
 }
 
+type PushState = "unknown" | "unsupported" | "ios-install" | "prompt" | "granted" | "denied";
+
+function urlBase64ToUint8Array(base64: string) {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const raw = atob((base64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function pushSupported() {
+  return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+function isIosNotInstalled() {
+  if (typeof navigator === "undefined") return false;
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const standalone = (navigator as Navigator & { standalone?: boolean }).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  return ios && !standalone;
+}
+
 class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -182,6 +203,9 @@ export default function LiveGame({ code }: { code: string }) {
   const [toast, setToast] = useState<string | null>(null);
   const [showReveal, setShowReveal] = useState(false);
   const [shared, setShared] = useState(false);
+  const [pushState, setPushState] = useState<PushState>("unknown");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushDismissed, setPushDismissed] = useState(true);
   const failures = useRef(0);
   const lastPhase = useRef<Phase | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -311,6 +335,76 @@ export default function LiveGame({ code }: { code: string }) {
     }
   }, [view?.phase, view]);
 
+  // Web push: find out where we stand, and re-register an existing subscription for this game.
+  useEffect(() => {
+    if (!identity || !view || view.status !== "running") return;
+    setPushDismissed(flag(`mafia-live:${code}:push-dismissed`));
+    if (!pushSupported()) {
+      setPushState(isIosNotInstalled() ? "ios-install" : "unsupported");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const reg = await navigator.serviceWorker.register("/sw.js");
+        const permission = Notification.permission;
+        if (permission === "denied") {
+          if (!cancelled) setPushState("denied");
+          return;
+        }
+        const existing = await reg.pushManager.getSubscription();
+        if (permission === "granted" && existing) {
+          if (!flag(`mafia-live:${code}:push-synced`)) {
+            await liveApi({ action: "pushSubscribe", code, secret: identity.secret, subscription: existing.toJSON() });
+            setFlag(`mafia-live:${code}:push-synced`);
+          }
+          if (!cancelled) setPushState("granted");
+          return;
+        }
+        if (!cancelled) setPushState("prompt");
+      } catch {
+        if (!cancelled) setPushState("unsupported");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [identity, view?.status, code, view]);
+
+  async function enablePush() {
+    if (!identity || pushBusy) return;
+    setPushBusy(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushState(permission === "denied" ? "denied" : "prompt");
+        return;
+      }
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      const res = await fetch("/api/push/key", { cache: "no-store" });
+      const { publicKey } = (await res.json()) as { publicKey?: string };
+      if (!publicKey) throw new Error("no key");
+      const sub =
+        (await reg.pushManager.getSubscription()) ??
+        (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) }));
+      await liveApi({ action: "pushSubscribe", code, secret: identity.secret, subscription: sub.toJSON() });
+      setFlag(`mafia-live:${code}:push-synced`);
+      setPushState("granted");
+      setToast("🔔 מסודר. נעדכן אותך כשמשהו קורה.");
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(null), 3500);
+    } catch (er) {
+      setErr(er instanceof Error ? er.message : "לא הצלחנו להפעיל התראות");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  function dismissPush() {
+    setFlag(`mafia-live:${code}:push-dismissed`);
+    setPushDismissed(true);
+  }
+
   // Dramatic role reveal, once per game.
   useEffect(() => {
     if (!view || view.status !== "running" || !view.me.role) return;
@@ -414,7 +508,7 @@ export default function LiveGame({ code }: { code: string }) {
 
   async function share() {
     const url = `${window.location.origin}/g/${code}`;
-    const payload = { title: "מאפיה", text: `בואו לשחק מאפיה. הקוד ${code}`, url };
+    const payload = { title: "AiYara", text: `בואו לשחק AiYara, מאפיה עם בוטים. הקוד ${code}`, url };
     try {
       if (navigator.share) {
         await navigator.share(payload);
@@ -579,7 +673,7 @@ export default function LiveGame({ code }: { code: string }) {
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 px-3 py-2 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-base font-extrabold leading-tight">{night ? "🌙 " : ""}מאפיה</div>
+            <div className="text-base font-extrabold leading-tight">{night ? "🌙 " : ""}AiYara</div>
             <div className="truncate text-xs text-dust">
               {view.dayNumber ? `יום ${view.dayNumber} · ` : ""}
               {phaseHint(view)}
@@ -604,6 +698,26 @@ export default function LiveGame({ code }: { code: string }) {
         )}
       </header>
 
+      {!pushDismissed && view.status === "running" && (pushState === "prompt" || pushState === "ios-install") && (
+        <div className="border-b border-white/10 bg-white/[.05] px-4 py-2.5">
+          <div className="mx-auto flex max-w-lg items-center gap-3 text-xs">
+            <span className="text-base" aria-hidden="true">🔔</span>
+            <span className="min-w-0 flex-1 leading-5 text-paper/85">
+              {pushState === "ios-install"
+                ? "באייפון התראות עובדות רק מהמסך הבית: שיתוף ← הוסף למסך הבית, ואז לפתוח משם."
+                : "לקבל התראה כשפונים אליך, מצביעים נגדך או כשמגיע הבוקר?"}
+            </span>
+            {pushState === "prompt" && (
+              <button type="button" onClick={() => void enablePush()} disabled={pushBusy} className="shrink-0 rounded-full bg-paper px-3 py-1.5 font-black text-ink disabled:opacity-50">
+                {pushBusy ? "…" : "כן"}
+              </button>
+            )}
+            <button type="button" onClick={dismissPush} className="shrink-0 rounded-full px-2 py-1.5 font-bold text-dust" aria-label="לא עכשיו">
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
       {view.winner && (
         <div className="bg-blood px-4 py-3 text-center">
           <div className="text-lg font-extrabold">{view.winnerText}</div>
@@ -808,6 +922,27 @@ export default function LiveGame({ code }: { code: string }) {
 
         <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${tab === "me" ? "block" : "hidden"}`}>
           <MePane view={view} onReveal={() => setShowReveal(true)} />
+          {view.status === "running" && (
+            <div className="mt-3 rounded-2xl bg-white/5 p-4 text-sm">
+              <div className="font-extrabold">התראות</div>
+              <p className="mt-1 text-xs leading-5 text-dust">
+                {pushState === "granted"
+                  ? "פועלות. נעדכן כשפונים אליך, מצביעים נגדך, בבוקר ובתור שלך."
+                  : pushState === "denied"
+                    ? "חסומות בדפדפן. אפשר לפתוח מחדש בהגדרות האתר."
+                    : pushState === "ios-install"
+                      ? "באייפון: הוסיפו את AiYara למסך הבית כדי לקבל התראות."
+                      : pushState === "unsupported"
+                        ? "הדפדפן הזה לא תומך בהתראות."
+                        : "כבויות."}
+              </p>
+              {pushState === "prompt" && (
+                <button type="button" onClick={() => void enablePush()} disabled={pushBusy} className="mt-3 min-h-11 w-full rounded-2xl bg-paper font-extrabold text-ink disabled:opacity-50">
+                  להפעיל התראות
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
