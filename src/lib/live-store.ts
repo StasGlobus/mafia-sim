@@ -195,6 +195,7 @@ async function supabaseAdapter(): Promise<Adapter> {
         if (error) {
           if (!leaseColumnMissing && /lease_until/.test(error.message ?? "")) {
             leaseColumnMissing = true;
+            console.warn("live_games.lease_until is missing; run supabase/migrations/20260903000000_add_live_games_lease.sql.");
             continue;
           }
           throw unavailable(error);
