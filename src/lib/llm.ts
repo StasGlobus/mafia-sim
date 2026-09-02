@@ -10,6 +10,11 @@ import { ROLE_HE } from "./types";
  */
 const MODEL = process.env.MAFIA_MODEL?.trim() || "gpt-4.1";
 
+/** The model agents actually use, for diagnostics. */
+export function agentModelName(): string {
+  return MODEL;
+}
+
 const PERSONA: Record<Player["personality"], Record<"m" | "f", string>> = {
   chatty: { m: "אתה דברן. כותב הרבה אבל קצר כל פעם. מקפיץ שיחה.", f: "את דברנית. כותבת הרבה אבל קצר כל פעם. מקפיצה שיחה." },
   quiet: { m: "אתה שקט. לרוב מילה-שתיים. לא מסביר.", f: "את שקטה. לרוב מילה-שתיים. לא מסבירה." },

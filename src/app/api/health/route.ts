@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { pingStore, storeEnvPresence } from "@/lib/live-store";
-import { llmAvailable } from "@/lib/llm";
+import { agentModelName, llmAvailable } from "@/lib/llm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function GET() {
       store: store.kind,
       storeError: store.error ?? null,
       llm: llmAvailable() ? (process.env.OPENAI_API_KEY ? "openai" : "vercel-ai-gateway") : "canned-lines",
-      model: process.env.MAFIA_MODEL?.trim() || "gpt-4.1-mini",
+      model: agentModelName(),
       env: storeEnvPresence(),
       vercelEnv: process.env.VERCEL_ENV ?? null,
     },
