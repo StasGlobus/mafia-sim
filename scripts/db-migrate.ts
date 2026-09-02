@@ -11,7 +11,7 @@
 
 import fs from "fs";
 import path from "path";
-import { Client } from "pg";
+import { runMigrations } from "../src/lib/db-migrate";
 
 /** Same files Next.js reads: .env.local wins over .env, real environment wins over both. */
 function loadEnvLocal() {
@@ -30,45 +30,29 @@ function loadEnvLocal() {
 
 async function main() {
   loadEnvLocal();
-  const url = process.env.SUPABASE_DB_URL;
-  if (!url) {
+  const candidates = [process.env.SUPABASE_DB_URL, process.env.POSTGRES_URL_NON_POOLING, process.env.POSTGRES_URL].filter(
+    (v): v is string => Boolean(v),
+  );
+  if (!candidates.length) {
     console.error(
       [
         "SUPABASE_DB_URL is not set.",
-        "Copy the connection string from Supabase > Project Settings > Database > Connection string (URI),",
+        "Copy the connection string from the Connect button in the Supabase dashboard (URI),",
         "put it in .env (or .env.local) as SUPABASE_DB_URL=postgresql://... and run this again.",
       ].join("\n"),
     );
     process.exit(1);
   }
-
-  const dir = path.join(process.cwd(), "supabase", "migrations");
-  const files = fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-  if (!files.length) {
-    console.error(`No .sql files in ${dir}`);
+  const result = await runMigrations(candidates);
+  for (const a of result.attempts) console.log(`could not connect to ${a.url}: ${a.error}`);
+  for (const f of result.applied) console.log(`applied ${f}`);
+  if (!result.ok) {
+    console.error(result.error);
     process.exit(1);
   }
-
-  const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
-  await client.connect();
-  try {
-    for (const file of files) {
-      const sql = fs.readFileSync(path.join(dir, file), "utf8");
-      process.stdout.write(`applying ${file} ... `);
-      await client.query(sql);
-      console.log("ok");
-    }
-    const { rows } = await client.query(
-      "select column_name from information_schema.columns where table_schema='public' and table_name='live_games' order by ordinal_position",
-    );
-    console.log(`live_games columns: ${rows.map((r: { column_name: string }) => r.column_name).join(", ")}`);
-    console.log("done. Now set SUPABASE_URL and SUPABASE_SECRET_KEY and open /api/health.");
-  } finally {
-    await client.end();
-  }
+  console.log(`connected via ${result.urlUsed}`);
+  console.log(`live_games columns: ${result.columns.join(", ")}`);
+  console.log("done. Now set SUPABASE_URL and SUPABASE_SECRET_KEY and open /api/health.");
 }
 
 main().catch((error) => {
