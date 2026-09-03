@@ -1,6 +1,21 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Frank_Ruhl_Libre, Heebo } from "next/font/google";
 import "./globals.css";
+
+const heebo = Heebo({
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "500", "700", "800"],
+  variable: "--font-heebo",
+  display: "swap",
+});
+
+const display = Frank_Ruhl_Libre({
+  subsets: ["hebrew", "latin"],
+  weight: ["400", "700", "900"],
+  variable: "--font-display",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -33,7 +48,7 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl">
+    <html lang="he" dir="rtl" className={`${heebo.variable} ${display.variable}`}>
       <body className="font-heebo antialiased">{children}</body>
     </html>
   );

@@ -2,10 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 const roles = [
-  { name: "זאב", detail: "מטעה ביום. צד בלילה.", art: "/art/wolf.png", tone: "text-red-300" },
-  { name: "רואה", detail: "מגלה אמת אחת בכל לילה.", art: "/art/seer.png", tone: "text-violet-200" },
-  { name: "רופא", detail: "יכול להציל מישהו מהלהקה.", art: "/art/doctor.png", tone: "text-emerald-200" },
-  { name: "תושב", detail: "קורא אנשים. מצביע. שורד.", art: "/art/villager.png", tone: "text-amber-100" },
+  { name: "זאב", detail: "מטעה ביום. צד בלילה.", art: "/art/wolf.png", tone: "text-ember" },
+  { name: "רואה", detail: "מגלה אמת אחת בכל לילה.", art: "/art/seer.png", tone: "text-paper" },
+  { name: "רופא", detail: "יכול להציל מישהו מהלהקה.", art: "/art/doctor.png", tone: "text-paper" },
+  { name: "תושב", detail: "קורא אנשים. מצביע. שורד.", art: "/art/villager.png", tone: "text-paper" },
 ];
 
 function ArrowIcon() {
@@ -46,12 +46,12 @@ export default function Landing() {
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,7,7,.97)_0%,rgba(8,7,7,.84)_43%,rgba(8,7,7,.2)_100%)] max-lg:bg-[linear-gradient(180deg,rgba(8,7,7,.25)_0%,rgba(8,7,7,.82)_46%,#080707_78%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_10%,rgba(190,38,33,.2),transparent_32%)]" />
 
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-12 lg:py-8">
+      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5 sm:px-8 lg:px-12 lg:py-8">
         <header className="flex items-center justify-between">
           <Link href="/" className="group flex items-center gap-3 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ember">
             <Image src="/art/icon.png" alt="" width={48} height={48} className="h-11 w-11 rounded-[14px] object-cover ring-1 ring-white/15 transition-transform group-hover:scale-105" />
             <div>
-              <div className="text-lg font-black leading-none tracking-tight">AiYara</div>
+              <div className="font-display text-lg font-black leading-none tracking-tight">AiYara</div>
               <div className="mt-1 text-[11px] font-medium tracking-[.18em] text-paper/55">העיירה לא נרדמת</div>
             </div>
           </Link>
@@ -70,12 +70,12 @@ export default function Landing() {
               </span>
               משחק חברתי ל־5–12 שחקנים, אנשים ובוטים
             </div>
-            <h1 className="max-w-xl text-5xl font-black leading-[.96] tracking-[-.045em] sm:text-7xl lg:text-[5.4rem]">
+            <h1 className="font-display max-w-xl text-[2.7rem] font-black leading-[1.02] tracking-[-.03em] sm:text-7xl lg:text-[5.2rem]">
               מי בעיירה
               <br />
               <span className="text-ember">מסתיר שיניים?</span>
             </h1>
-            <p className="mt-6 max-w-xl text-lg font-medium leading-8 text-paper/72 sm:text-xl">
+            <p className="mt-6 max-w-xl text-base font-medium leading-7 text-paper/80 sm:text-xl sm:leading-8">
               מאפיה בעברית, בקצב שלכם: משחק מהיר של חצי שעה או עיירה שחיה ימים. מדברים ביום, פועלים בלילה, ושחקני AI ממלאים כל כיסא שנשאר ריק.
             </p>
 
@@ -90,10 +90,20 @@ export default function Landing() {
               </Link>
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-paper/50">
+            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-paper/65">
               <span>בלי הורדה</span><span className="h-1 w-1 rounded-full bg-paper/25" />
               <span>שם סודי לכל שחקן</span><span className="h-1 w-1 rounded-full bg-paper/25" />
               <span>עובד גם לבד מול הבוטים</span>
+            </div>
+
+            <div className="role-strip mt-8 lg:hidden">
+              {roles.map((role) => (
+                <div key={role.name} className="relative h-40 overflow-hidden rounded-2xl border border-white/10">
+                  <Image src={role.art} alt="" fill sizes="46vw" className="object-cover" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                  <div className={`absolute inset-x-0 bottom-0 p-3 font-display text-lg font-black ${role.tone}`}>{role.name}</div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -105,7 +115,7 @@ export default function Landing() {
                   <Image src={role.art} alt="" fill sizes="240px" className="object-cover transition duration-700 group-hover:scale-105" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-5">
-                    <div className={`text-2xl font-black ${role.tone}`}>{role.name}</div>
+                    <div className={`font-display text-2xl font-black ${role.tone}`}>{role.name}</div>
                     <p className="mt-1 text-xs font-medium text-paper/65">{role.detail}</p>
                   </div>
                 </div>

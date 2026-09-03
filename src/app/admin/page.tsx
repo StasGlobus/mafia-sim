@@ -112,11 +112,11 @@ export default function AdminHomePage() {
           </Link>
         </header>
 
-        <div className="grid flex-1 items-center gap-12 py-10 lg:grid-cols-[.8fr_1.2fr]">
-          <section className="max-w-lg">
+        <div className="grid flex-1 items-start gap-8 py-8 lg:grid-cols-[.75fr_1.25fr] lg:items-center lg:gap-12 lg:py-10">
+          <section className="order-2 max-w-lg lg:order-1">
             <p className="text-sm font-black text-ember">ניהול משחק</p>
-            <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">אתם פותחים.<br />העיירה מתעוררת.</h1>
-            <p className="mt-5 text-lg leading-8 text-paper/60">
+            <h1 className="font-display mt-3 text-3xl font-black leading-tight tracking-tight sm:text-6xl">אתם פותחים.<br />העיירה מתעוררת.</h1>
+            <p className="mt-5 text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">
               אתם קובעים את ההרכב, הזהויות וקצב הכאוס. במאי AI מנהל את הלילה ושומר שכל משחק יתפתח אחרת.
             </p>
 
@@ -139,10 +139,10 @@ export default function AdminHomePage() {
             </form>
           </section>
 
-          <section className="entry-panel rounded-[30px] border border-white/10 p-5 backdrop-blur-xl sm:p-8" aria-labelledby="create-title">
+          <section className="entry-panel order-1 rounded-[30px] border border-white/10 p-5 backdrop-blur-xl sm:p-8 lg:order-2" aria-labelledby="create-title">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 id="create-title" className="text-2xl font-black">שולחן חדש</h2>
+                <h2 id="create-title" className="font-display text-2xl font-black">שולחן חדש</h2>
                 <p className="mt-1 text-sm text-paper/50">הקוד יופיע מיד אחרי הפתיחה.</p>
               </div>
               <span className="rounded-full border border-ember/30 bg-ember/10 px-3 py-1 text-xs font-bold text-red-100">שעון ישראל</span>

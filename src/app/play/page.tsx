@@ -71,11 +71,11 @@ export default function PlayPage() {
           </Link>
         </header>
 
-        <div className="grid flex-1 items-center gap-12 py-10 lg:grid-cols-2">
-          <section className="max-w-xl">
+        <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-2 lg:gap-12 lg:py-10">
+          <section className="order-2 max-w-xl lg:order-1">
             <p className="text-sm font-black text-ember">הצטרפות למשחק</p>
-            <h1 className="mt-3 text-4xl font-black leading-tight tracking-tight sm:text-6xl">העיירה מחכה<br />לזהות החדשה שלך.</h1>
-            <p className="mt-5 max-w-lg text-lg leading-8 text-paper/60">
+            <h1 className="font-display mt-3 text-3xl font-black leading-tight tracking-tight sm:text-6xl">העיירה מחכה<br />לזהות החדשה שלך.</h1>
+            <p className="mt-5 max-w-lg text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">
               נכנסים עם הקוד שקיבלתם מהמנהל. מנהל המשחק קובע אם הכפר משחק בזהויות אמיתיות או בשמות בדויים.
             </p>
             <div className="mt-8 hidden gap-3 text-sm text-paper/55 sm:flex">
@@ -84,9 +84,9 @@ export default function PlayPage() {
             </div>
           </section>
 
-          <section className="entry-panel rounded-[30px] border border-white/10 p-5 backdrop-blur-xl sm:p-8" aria-labelledby="join-title">
+          <section className="entry-panel order-1 rounded-[30px] border border-white/10 p-5 backdrop-blur-xl sm:p-8 lg:order-2" aria-labelledby="join-title">
             <div className="mb-7">
-              <h2 id="join-title" className="text-2xl font-black">כניסה לשולחן</h2>
+              <h2 id="join-title" className="font-display text-2xl font-black">כניסה לשולחן</h2>
               <p className="mt-1 text-sm text-paper/50">שני פרטים — ואתם בפנים.</p>
             </div>
 
