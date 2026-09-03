@@ -1012,7 +1012,7 @@ export async function liveAdminGet(input: { code: string; secret: string }): Pro
   return { ok: true, game: adminView(loaded.game, loaded.me, loaded.now) };
 }
 
-export async function liveSay(input: { code: string; secret: string; text: string }): Promise<ActionResult> {
+export async function liveSay(input: { code: string; secret: string; text: string; replyToId?: string }): Promise<ActionResult> {
   return mutate(input.code.trim(), async (game, now) => {
     const me = findPlayerBySecret(game, input.secret);
     if (!me) return UNAUTHORIZED;
@@ -1029,14 +1029,23 @@ export async function liveSay(input: { code: string; secret: string; text: strin
     const dayOk = game.phase === "day" && game.openChannel === "public";
     if (!wolfOk && !dayOk) return { ok: false, error: "העיירה סגורה עכשיו. מדברים ביום", status: 400 };
 
+    const channel = wolfOk ? "wolves" : "public";
+    let replyToId: string | undefined;
+    if (typeof input.replyToId === "string" && input.replyToId) {
+      const quoted = game.messages.find((m) => m.id === input.replyToId && m.channel === channel);
+      if (quoted) replyToId = quoted.id;
+    }
+
     const sent = uniquePush(game, {
-      channel: wolfOk ? "wolves" : "public",
+      channel,
       authorId: me.id,
       authorName: me.name,
       text,
       ts: now,
+      replyToId,
     });
     if (!sent) return { ok: false, error: "ההודעה לא נשלחה", status: 400 };
+    if (sent.replyToId === undefined) delete sent.replyToId;
     game.lastHumanActionAt = now;
     if (dayOk) onPublicMessage(game, sent, now);
     else onWolfMessage(game, sent, now);

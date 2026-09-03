@@ -200,7 +200,12 @@ export async function POST(req: NextRequest) {
       return reply(req, result, code, secret);
     }
     if (action === "say") {
-      const result = await liveSay({ code, secret, text: String(body.text ?? "") });
+      const result = await liveSay({
+        code,
+        secret,
+        text: String(body.text ?? ""),
+        replyToId: typeof body.replyToId === "string" ? body.replyToId : undefined,
+      });
       if (result.ok) advanceLater(code);
       return reply(req, result, code, secret);
     }

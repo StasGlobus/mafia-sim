@@ -9,6 +9,11 @@ type Tab = "manage" | "players" | "secrets";
 type StoredMe = { playerId: string; secret: string; fakeName: string };
 type Gate = "loading" | "admin" | "notHost" | "noIdentity" | "missing";
 
+const HOUR_OPTIONS = Array.from({ length: 48 }, (_, index) => {
+  const hour = String(Math.floor(index / 2)).padStart(2, "0");
+  return `${hour}:${index % 2 ? "30" : "00"}`;
+});
+
 function loadMe(code: string): StoredMe | null {
   try {
     const raw = localStorage.getItem(`mafia-live:${code}`);
@@ -380,21 +385,31 @@ export default function AdminGame({ code }: { code: string }) {
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <label className="text-sm">
                     <span className="text-dust">פתיחה</span>
-                    <input
-                      type="time"
+                    <select
                       value={dayStart}
                       onChange={(e) => setDayStart(e.target.value)}
                       className="mt-1 min-h-12 w-full rounded-2xl bg-white/10 px-3 text-paper"
-                    />
+                    >
+                      {HOUR_OPTIONS.map((hour) => (
+                        <option key={hour} value={hour}>
+                          {hour}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="text-sm">
                     <span className="text-dust">סגירה</span>
-                    <input
-                      type="time"
+                    <select
                       value={dayEnd}
                       onChange={(e) => setDayEnd(e.target.value)}
                       className="mt-1 min-h-12 w-full rounded-2xl bg-white/10 px-3 text-paper"
-                    />
+                    >
+                      {HOUR_OPTIONS.map((hour) => (
+                        <option key={hour} value={hour}>
+                          {hour}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
                 <div className="mt-4 text-sm text-dust">ימים</div>
@@ -424,6 +439,27 @@ export default function AdminGame({ code }: { code: string }) {
                 </button>
               </div>
               )}
+              <div className="rounded-3xl bg-white/5 p-4">
+                <div className="font-extrabold">מי בפנים</div>
+                <div className="mt-2 text-3xl font-extrabold tabular-nums">
+                  {view.humansJoined} / {view.seats}
+                </div>
+                <div className="text-sm text-dust">בני אדם שהצטרפו</div>
+                {view.rules.botMode === "fill" && (
+                  <p className="mt-2 text-xs text-dust">מקומות ריקים יתמלאו בבוטים בהתחלה</p>
+                )}
+                <ul className="mt-3 space-y-1.5 text-sm">
+                  {view.players
+                    .filter((p) => p.kind === "human")
+                    .map((p) => (
+                      <li key={p.id} className="text-paper/85">
+                        • {p.realName ?? p.name}
+                        {p.realName && p.name && p.realName !== p.name ? ` · ${p.name}` : ""}
+                      </li>
+                    ))}
+                  {view.humansJoined === 0 && <li className="text-dust">עוד אף אחד לא הצטרף</li>}
+                </ul>
+              </div>
               <button
                 type="button"
                 onClick={() => void start()}

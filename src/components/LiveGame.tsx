@@ -196,6 +196,7 @@ export default function LiveGame({ code }: { code: string }) {
   const [tab, setTab] = useState<Tab>("village");
   const [err, setErr] = useState<string | null>(null);
   const [text, setText] = useState("");
+  const [replyToId, setReplyToId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [starting, setStarting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -492,31 +493,56 @@ export default function LiveGame({ code }: { code: string }) {
   async function send() {
     if (!identity || !view || !text.trim() || sending) return;
     const t = text.trim();
+    const quoting = replyToId;
     const tempId = `tmp-${Date.now()}`;
     const channel = tab === "role" ? "wolves" : "public";
     setText("");
+    setReplyToId(null);
     setSending(true);
     // Show the line at once; the server's copy replaces it on the next view.
     setView((current) =>
       current
         ? {
             ...current,
-            messages: [...current.messages, { id: tempId, channel, authorId: current.me.playerId, authorName: current.me.fakeName, text: t, ts: Date.now() }],
+            messages: [
+              ...current.messages,
+              {
+                id: tempId,
+                channel,
+                authorId: current.me.playerId,
+                authorName: current.me.fakeName,
+                text: t,
+                ts: Date.now(),
+                ...(quoting ? { replyToId: quoting } : {}),
+              },
+            ],
           }
         : current,
     );
     try {
-      const data = await liveApi({ action: "say", code, secret: identity.secret, text: t });
+      const data = await liveApi({
+        action: "say",
+        code,
+        secret: identity.secret,
+        text: t,
+        ...(quoting ? { replyToId: quoting } : {}),
+      });
       if (data.game) setView(data.game);
       setErr(null);
     } catch (er) {
       setView((current) => (current ? { ...current, messages: current.messages.filter((m) => m.id !== tempId) } : current));
       setText(t);
+      if (quoting) setReplyToId(quoting);
       setErr(er instanceof Error ? er.message : "לא הלך");
     } finally {
       setSending(false);
       requestAnimationFrame(() => messageInput.current?.focus());
     }
+  }
+
+  function beginReply(messageId: string) {
+    setReplyToId(messageId);
+    requestAnimationFrame(() => messageInput.current?.focus());
   }
 
   function address(name: string) {
@@ -689,6 +715,7 @@ export default function LiveGame({ code }: { code: string }) {
   const roleChannelLabel = view.me.role === "wolf" ? "ערוץ הזאבים" : view.me.role === "seer" ? "יומן הרואה" : view.me.role === "doctor" ? "יומן הרופא" : "אין לך ערוץ פרטי";
   const roleChannelHint = view.me.role === "wolf" ? "רק חברי הלהקה רואים וכותבים כאן בלילה" : view.me.role === "seer" ? "רק תוצאות הבדיקות שלך מופיעות כאן" : view.me.role === "doctor" ? "רק בחירות השמירה שלך מופיעות כאן" : "לתושבים אין שיחת לילה פרטית";
   const canCompose = view.me.canSpeak && ((tab === "village" && view.phase === "day") || (tab === "role" && view.phase === "night_wolves" && view.me.role === "wolf"));
+  const replyTarget = replyToId ? view.messages.find((m) => m.id === replyToId) ?? null : null;
   const typingHere =
     (tab === "village" && view.phase === "day") || (tab === "role" && view.phase === "night_wolves" && view.me.role === "wolf") ? view.typing : [];
   const unread = Math.max(0, publicCount - seenPublic);
@@ -804,7 +831,11 @@ export default function LiveGame({ code }: { code: string }) {
               </div>
             )}
             <div ref={scroller} onScroll={onScroll} className="chat-scroll min-h-0 flex-1 space-y-2 px-3 py-3">
-              <MessageList messages={view.messages.filter((m) => m.channel === activeChannel)} myId={view.me.playerId} />
+              <MessageList
+                messages={view.messages.filter((m) => m.channel === activeChannel)}
+                myId={view.me.playerId}
+                onReply={canCompose ? beginReply : undefined}
+              />
               {typingHere.length > 0 && <Typing names={typingHere} players={view.players} />}
               <div ref={publicEnd} />
             </div>
@@ -833,6 +864,24 @@ export default function LiveGame({ code }: { code: string }) {
             )}
             {canCompose ? (
               <div className="border-t border-white/10">
+                {replyTarget && (
+                  <div className="flex items-start gap-2 border-b border-white/5 bg-white/[.04] px-3 py-2 text-xs">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-paper/80">בתגובה ל{replyTarget.authorName}</div>
+                      <div className="truncate text-dust">
+                        {replyTarget.text.length > 40 ? `${replyTarget.text.slice(0, 40)}…` : replyTarget.text}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyToId(null)}
+                      className="shrink-0 rounded-full px-2 py-1 text-dust hover:bg-white/10 hover:text-paper"
+                      aria-label="בטל תגובה"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
                 {tab === "village" && view.phase === "day" && (
                   <div className="chat-scroll flex items-center gap-1.5 overflow-x-auto px-3 pb-1 pt-2" aria-label="פנייה מהירה לשחקן">
                     <span className="shrink-0 text-[11px] text-dust">לפנות אל</span>
@@ -1140,7 +1189,15 @@ function Typing({ names, players }: { names: string[]; players: LiveView["player
   );
 }
 
-function MessageList({ messages, myId }: { messages: ChatMessage[]; myId: string }) {
+function MessageList({
+  messages,
+  myId,
+  onReply,
+}: {
+  messages: ChatMessage[];
+  myId: string;
+  onReply?: (messageId: string) => void;
+}) {
   const items = useMemo(() => {
     const out: { key: string; separator?: string; message?: ChatMessage; continued?: boolean }[] = [];
     let lastDay = "";
@@ -1210,11 +1267,26 @@ function MessageList({ messages, myId }: { messages: ChatMessage[]; myId: string
                   <span className="text-[10px] opacity-60">{fmtTime(m.ts)}</span>
                 </div>
               )}
-              <div
-                className={`inline-block max-w-full rounded-2xl px-3 py-2 text-[15px] leading-snug ${mine ? "rounded-bl-md bg-[#3a2a22]" : "rounded-br-md bg-[#2a2420]"} ${pending ? "opacity-60" : ""}`}
-              >
-                {repliedTo && <div className="mb-1 border-r-2 border-ember/60 pr-2 text-[11px] text-paper/45">בתגובה ל{repliedTo.authorName}</div>}
+              <div className={`group relative inline-block max-w-full rounded-2xl px-3 py-2 text-[15px] leading-snug ${mine ? "rounded-bl-md bg-[#3a2a22]" : "rounded-br-md bg-[#2a2420]"} ${pending ? "opacity-60" : ""}`}>
+                {repliedTo && (
+                  <div className="mb-1 border-r-2 border-ember/60 pr-2 text-[11px] text-paper/45">
+                    <div className="font-bold text-paper/55">בתגובה ל{repliedTo.authorName}</div>
+                    <div className="truncate opacity-80">
+                      {repliedTo.text.length > 40 ? `${repliedTo.text.slice(0, 40)}…` : repliedTo.text}
+                    </div>
+                  </div>
+                )}
                 {m.text}
+                {onReply && !pending && (
+                  <button
+                    type="button"
+                    onClick={() => onReply(m.id)}
+                    className="mt-1.5 block text-[11px] font-bold text-dust/80 hover:text-paper"
+                    aria-label={`השב ל${m.authorName}`}
+                  >
+                    ↩ השב
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -23,6 +23,7 @@ export type SpeakKind =
  * budget is spent. They carry two kinds of gender tokens:
  *   {חושב|חושבת}  agrees with the speaker
  *   [הוא|היא]     agrees with the target ({t})
+ *   (אתה|את)      agrees with the addressed person ({a})
  * Placeholders: {t} target, {a} the person being answered, {d} the dead, {r} their role.
  */
 
@@ -38,9 +39,9 @@ const GENERIC: Record<SpeakKind, string[]> = {
   push: ["נשאר מעט זמן. מי איתי על {t}?", "צריך עוד קולות על {t} לפני הנעילה", "אם לא סוגרים על {t} עכשיו, הלילה יהיה גרוע"],
   deflect: ["לא אני. תסתכלו על {t}", "מצחיק שדווקא {a} דוחף עליי. {t} הרבה יותר [מוזר|מוזרה]", "אני {תושב|תושבת}. {t} [מתחבא|מתחבאת] מאחורי ההצבעה הזאת"],
   claim: ["אני {הרואה|הרואה}. בדקתי את {t} בלילה. [זאב|זאבה].", "אין לי מה להסתיר: אני {הרואה|הרואה} ו{t} [זאב|זאבה]."],
-  reply: ["{a}, ראיתי. אני עדיין על {t}", "{a}, כרגע {t} הכי לא [מסתדר|מסתדרת] לי", "{a}, תשובה קצרה: {t}. ותסביר למה אתה שואל"],
-  reply_back: ["{a}, דווקא אתה הכי לא מסתדר לי", "{a}, שאלה טובה. אתה.", "{a}, אם אני {חייב|חייבת} שם, זה אתה"],
-  deflect_back: ["לא אני. דווקא אתה, {a}", "{a}, מי שממהר להאשים בדרך כלל מסתיר משהו", "מצחיק שדווקא {a} דוחף עליי. תסתכלו עליו"],
+  reply: ["{a}, ראיתי. אני עדיין על {t}", "{a}, כרגע {t} הכי לא [מסתדר|מסתדרת] לי", "{a}, תשובה קצרה: {t}. ו(תסביר|תסבירי) למה (אתה|את) (שואל|שואלת)"],
+  reply_back: ["{a}, דווקא (אתה|את) הכי לא (מסתדר|מסתדרת) לי", "{a}, שאלה טובה. (אתה|את).", "{a}, אם אני {חייב|חייבת} שם, זה (אתה|את)"],
+  deflect_back: ["לא אני. דווקא (אתה|את), {a}", "{a}, מי שממהר להאשים בדרך כלל מסתיר משהו", "מצחיק שדווקא {a} (דוחף|דוחפת) עליי. תסתכלו (עליו|עליה)"],
   wolf_plan: ["יאללה {t} הלילה", "אני על {t}. [הוא|היא] [דוחף|דוחפת] חזק", "{t}. ובלי דרמות מחר"],
   wolf_agree: ["סבבה, {t}", "איתך. {t} וזהו", "אוקי, סוגרים {t}"],
 };
@@ -204,15 +205,19 @@ export function pick<T>(arr: T[], rnd: () => number): T {
 export interface Genders {
   speaker?: Gender;
   target?: Gender;
+  /** Grammatical gender of {a} — the person being answered. */
+  addressed?: Gender;
 }
 
-/** Resolve {m|f} (speaker) and [m|f] (target) tokens, then the named placeholders. */
+/** Resolve {m|f} (speaker), [m|f] (target), (m|f) (addressed), then named placeholders. */
 export function fill(tpl: string, vars: Record<string, string>, genders: Genders = {}): string {
   const speaker = genders.speaker === "f" ? 1 : 0;
   const target = genders.target === "f" ? 1 : 0;
+  const addressed = genders.addressed === "f" ? 1 : 0;
   return tpl
     .replace(/\{([^{}|]+)\|([^{}|]+)\}/g, (_, m: string, f: string) => (speaker ? f : m))
     .replace(/\[([^\[\]|]+)\|([^\[\]|]+)\]/g, (_, m: string, f: string) => (target ? f : m))
+    .replace(/\(([^()|]+)\|([^()|]+)\)/g, (_, m: string, f: string) => (addressed ? f : m))
     .replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? "");
 }
 

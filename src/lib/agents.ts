@@ -131,15 +131,37 @@ export function isDirectlyAddressed(text: string, name: string): boolean {
   if (!words.length) return false;
   if (text.includes(`@${name}`)) return true;
   if (words[0] === "היי" && words[1] === name) return true;
-  if (words[0] === name) return true;
+  // Name at the start, or in the first few words (covers "שם," / "שם:" / "שם —").
+  if (words.slice(0, 4).includes(name)) return true;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`(?:^|[\\s])${escaped}\\s*[,:：،—\\-–]`).test(text)) return true;
   return /[?？]/.test(text) && words[words.length - 1] === name;
+}
+
+function agentAddressedByReply(
+  state: GameState,
+  message: GameState["messages"][number],
+): Player | null {
+  if (!message.replyToId) return null;
+  const quoted = state.messages.find((m) => m.id === message.replyToId);
+  if (!quoted?.authorId || quoted.authorId === message.authorId) return null;
+  return (
+    living(state).find(
+      (player) =>
+        player.id === quoted.authorId &&
+        player.kind !== "human" &&
+        !player.muted,
+    ) ?? null
+  );
 }
 
 function directRecipient(
   state: GameState,
   message: GameState["messages"][number],
 ): Player | null {
-  if (message.channel !== "public" || message.narrator || message.replyToId) return null;
+  if (message.channel !== "public" || message.narrator) return null;
+  const byReply = agentAddressedByReply(state, message);
+  if (byReply) return byReply;
   return (
     living(state).find(
       (player) =>

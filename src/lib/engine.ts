@@ -132,6 +132,10 @@ export function narrator(state: GameState, text: string, at?: number) {
   });
 }
 
+function heCount(n: number, singular: string, plural: string) {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
 export function checkWin(state: GameState, at?: number): boolean {
   const alive = living(state);
   const wolves = alive.filter((p) => p.role === "wolf");
@@ -140,9 +144,9 @@ export function checkWin(state: GameState, at?: number): boolean {
     state.status = "ended";
     state.phase = "ended";
     state.winner = "town";
-    state.winnerText = "התושבים ניצחו. הזאבים נתלו.";
+    state.winnerText = "התושבים ניצחו. לא נשארו זאבים.";
     state.openChannel = "none";
-    narrator(state, "התושבים ניצחו. העיירה נקייה.", at);
+    narrator(state, "התושבים ניצחו. לא נשארו זאבים. העיירה נקייה.", at);
     logEvent(state, "ניצחון תושבים", at);
     return true;
   }
@@ -150,9 +154,11 @@ export function checkWin(state: GameState, at?: number): boolean {
     state.status = "ended";
     state.phase = "ended";
     state.winner = "wolves";
-    state.winnerText = "הזאבים ניצחו.";
+    const wolfPart = heCount(wolves.length, "זאב", "זאבים");
+    const townPart = heCount(town.length, "תושב", "תושבים");
+    state.winnerText = `הזאבים ניצחו. נשארו ${wolfPart} מול ${townPart}.`;
     state.openChannel = "none";
-    narrator(state, "הזאבים ניצחו. העיירה שלהם עכשיו.", at);
+    narrator(state, `הזאבים ניצחו. נשארו ${wolfPart} מול ${townPart}. העיירה שלהם עכשיו.`, at);
     logEvent(state, "ניצחון זאבים", at);
     return true;
   }

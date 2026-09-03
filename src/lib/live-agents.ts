@@ -36,7 +36,11 @@ const HOUR = 60 * MIN;
 
 /** Backfilled lines older than this use canned text instead of the model. */
 const LLM_FRESH_MS = 6 * HOUR;
-const MAX_REACTIONS_PER_DAY = 4;
+function maxReactionsFor(personality: Personality): number {
+  if (personality === "chatty" || personality === "anxious") return 3;
+  if (personality === "quiet" || personality === "cold") return 1;
+  return 2;
+}
 
 // ---------------------------------------------------------------------------
 // Per-request budget
@@ -91,14 +95,14 @@ interface Talk {
 }
 
 const TALK: Record<Personality, Talk> = {
-  chatty: { gapMin: 55, budget: 12, react: 0.8, herd: 0.5, momentum: 0.5, bandwagon: 0.6 },
-  rambling: { gapMin: 75, budget: 9, react: 0.55, herd: 0.4, momentum: 0.35, bandwagon: 0.5 },
-  anxious: { gapMin: 70, budget: 9, react: 0.9, herd: 0.6, momentum: 0.45, bandwagon: 0.7 },
-  joker: { gapMin: 80, budget: 8, react: 0.6, herd: 0.4, momentum: 0.4, bandwagon: 0.55 },
-  suspicious: { gapMin: 90, budget: 8, react: 0.7, herd: 0.15, momentum: 0.35, bandwagon: 0.3 },
-  naive: { gapMin: 110, budget: 6, react: 0.6, herd: 1.0, momentum: 0.3, bandwagon: 0.9 },
-  cold: { gapMin: 160, budget: 4, react: 0.4, herd: 0.3, momentum: 0.15, bandwagon: 0.3 },
-  quiet: { gapMin: 200, budget: 3, react: 0.35, herd: 0.45, momentum: 0.1, bandwagon: 0.5 },
+  chatty: { gapMin: 85, budget: 6, react: 0.75, herd: 0.5, momentum: 0.4, bandwagon: 0.55 },
+  rambling: { gapMin: 115, budget: 5, react: 0.5, herd: 0.4, momentum: 0.3, bandwagon: 0.45 },
+  anxious: { gapMin: 105, budget: 5, react: 0.85, herd: 0.6, momentum: 0.4, bandwagon: 0.65 },
+  joker: { gapMin: 120, budget: 4, react: 0.55, herd: 0.4, momentum: 0.35, bandwagon: 0.5 },
+  suspicious: { gapMin: 140, budget: 4, react: 0.65, herd: 0.15, momentum: 0.3, bandwagon: 0.3 },
+  naive: { gapMin: 165, budget: 3, react: 0.55, herd: 1.0, momentum: 0.25, bandwagon: 0.85 },
+  cold: { gapMin: 240, budget: 2, react: 0.35, herd: 0.3, momentum: 0.12, bandwagon: 0.25 },
+  quiet: { gapMin: 300, budget: 2, react: 0.3, herd: 0.45, momentum: 0.08, bandwagon: 0.45 },
 };
 
 // ---------------------------------------------------------------------------
@@ -218,12 +222,22 @@ function spokeToday(game: LiveGame, playerId: string): boolean {
   return game.messages.some((m) => m.channel === "public" && !m.narrator && m.authorId === playerId && m.ts >= game.windowStartAt);
 }
 
+/** Non-narrator public lines stamped since the current day window opened. */
+function publicPlayerMessagesToday(game: LiveGame): ChatMessage[] {
+  return game.messages.filter((m) => m.channel === "public" && !m.narrator && m.ts >= game.windowStartAt);
+}
+
+/** First messages of the day: not enough chat yet to accuse silence or pile on. */
+function isEarlyChat(game: LiveGame): boolean {
+  return publicPlayerMessagesToday(game).length < 2;
+}
+
 /**
  * Early in the day, silence is not evidence. A human who is still reading must
  * not become the default target of every bored agent.
  */
 function quietGrace(game: LiveGame, at = Date.now()): boolean {
-  return game.phase === "day" && progressAt(game, at) < 0.4;
+  return game.phase === "day" && (progressAt(game, at) < 0.4 || isEarlyChat(game));
 }
 
 function topSuspect(game: LiveGame, me: Player, exclude: string[] = [], at = Date.now()): Suspect | null {
@@ -472,11 +486,17 @@ export function onPublicMessage(game: LiveGame, msg: ChatMessage, at: number) {
       at,
     });
   }
+  const priorToday = publicPlayerMessagesToday(game).filter((m) => m.id !== msg.id).length;
+  const quoted = msg.replyToId ? game.messages.find((m) => m.id === msg.replyToId) : null;
+  const quotedAuthorId = quoted?.authorId ?? null;
   for (const a of agentsAlive(game)) {
     if (a.id === author?.id) continue;
     const talk = TALK[a.personality];
     const m = mem(game, a.id);
-    const addressed = !msg.replyToId && isDirectlyAddressed(msg.text, a.name);
+    const addressedByQuote = quotedAuthorId === a.id;
+    const addressedByName = isDirectlyAddressed(msg.text, a.name);
+    const addressed = addressedByQuote || addressedByName;
+    // Nothing to reply to if this is somehow the only signal and we invented a reply — skip when day chat was empty before a non-addressing ping.
     if (addressed && !a.muted) {
       m.reaction = { kind: "reply", dueAt: at + jitter(8 * SEC, 40 * SEC), messageId: msg.id, aboutId: author?.id };
     } else if (named.some((p) => p.id === a.id) && accusatory && author) {
@@ -484,13 +504,19 @@ export function onPublicMessage(game: LiveGame, msg: ChatMessage, at: number) {
       if (!m.reaction && !a.muted && rnd() < talk.react) {
         m.reaction = { kind: "defend", dueAt: at + jitter(20 * SEC, 3 * MIN) * scale, aboutId: author.id };
       }
+    } else if (named.some((p) => p.id === a.id) && !accusatory && author?.kind === "human" && !a.muted) {
+      // Soft mention: modest chance of a short reply even without an accusation.
+      if (!m.reaction && priorToday > 0 && rnd() < talk.react * 0.35) {
+        m.reaction = { kind: "reply", dueAt: at + jitter(15 * SEC, 90 * SEC) * scale, messageId: msg.id, aboutId: author.id };
+      }
     } else if (m.nextSpeakAt && rnd() < talk.momentum) {
       m.nextSpeakAt = Math.min(m.nextSpeakAt, at + jitter(30 * SEC, 5 * MIN) * scale);
     }
     if (author && accusatory && rnd() < 0.6) {
       for (const q of named) {
         if (q.id === a.id) continue;
-        bump(game, a, q.id, 0.35 * talk.herd, `${author.name} ${author.gender === "f" ? "האשימה" : "האשים"} אותו`);
+        const him = q.gender === "f" ? "אותה" : "אותו";
+        bump(game, a, q.id, 0.35 * talk.herd, `${author.name} ${author.gender === "f" ? "האשימה" : "האשים"} ${him}`);
       }
       if (a.personality === "suspicious" && named.length) bump(game, a, author.id, 0.15, "מאשים הרבה");
     }
@@ -542,7 +568,8 @@ export function onVote(game: LiveGame, voter: Player, targetId: string, at: numb
     }
     const pile = Object.values(game.votes).filter((t) => t === targetId).length;
     // The first vote is a hint; a pile-on is not new information.
-    bump(game, a, targetId, (0.35 / Math.sqrt(pile)) * talk.herd, `${voter.name} ${voter.gender === "f" ? "הצביעה" : "הצביע"} נגדו`);
+    const them = target?.gender === "f" ? "נגדה" : "נגדו";
+    bump(game, a, targetId, (0.35 / Math.sqrt(pile)) * talk.herd, `${voter.name} ${voter.gender === "f" ? "הצביעה" : "הצביע"} ${them}`);
     if (a.personality === "suspicious") bump(game, a, voter.id, 0.2, "ממהר להצביע");
   }
 }
@@ -689,6 +716,10 @@ async function say(game: LiveGame, me: Player, kind: SpeakKind, at: number, budg
     r: roleWord(game.lastKill?.role),
   };
   let text: string | null = null;
+  const facts = factsFor(game, me, at);
+  if (o.replyTo || (o.a && (kind === "reply" || kind === "reply_back" || kind === "deflect_back"))) {
+    facts.unshift("פנו אליך / השיבו להודעה שלך / הזכירו אותך — ענה על זה בקונקרטיות מהצ'אט.");
+  }
   if (mayUseLlm(budget, at)) {
     budget.llmCalls += 1;
     text = await generateAgentLine({
@@ -696,12 +727,16 @@ async function say(game: LiveGame, me: Player, kind: SpeakKind, at: number, budg
       me,
       channel,
       hint: o.hint ?? hintFor(game, kind, o, at),
-      facts: factsFor(game, me, at),
+      facts,
       replyTo: o.replyTo,
       at,
     });
   }
-  const genders = { speaker: me.gender, target: o.t?.gender };
+  const genders = {
+    speaker: me.gender,
+    target: o.t?.gender ?? (kind === "reply_back" || kind === "deflect_back" ? o.a?.gender : undefined),
+    addressed: o.a?.gender,
+  };
   if (!text) text = lineFor(me.personality, kind, vars, rnd, genders);
   if (text === m.lastText) text = lineFor(me.personality, kind, vars, rnd, genders);
   if (!text) return null;
@@ -779,12 +814,27 @@ function planDayLine(game: LiveGame, me: Player, at: number): Plan {
   const votesOnMe = counts[me.id] ?? 0;
   const top = topSuspect(game, me, [], at);
   const s = suspicionOf(game, me);
+  const early = isEarlyChat(game) || quietGrace(game, at);
 
   if (!m.reactedToMorning && p < 0.35 && (game.lastKill || game.dayNumber > 1)) {
     m.reactedToMorning = true;
     if (game.lastKill?.saved) return { kind: "react_save" };
     if (game.lastKill?.name) return { kind: "react_death" };
     return { kind: "small" };
+  }
+  // First public lines of the day: no accuse / reply / silence-shaming.
+  if (early && publicPlayerMessagesToday(game).length < 2) {
+    if (game.lastKill?.saved && !m.reactedToMorning) {
+      m.reactedToMorning = true;
+      return { kind: "react_save" };
+    }
+    if (game.lastKill?.name && !m.reactedToMorning) {
+      m.reactedToMorning = true;
+      return { kind: "react_death" };
+    }
+    const open = rnd();
+    if (open < 0.55) return { kind: "small" };
+    return { kind: "question", t: null };
   }
   const claimWolf = shouldClaim(game, me, at);
   if (claimWolf) return { kind: "claim", t: claimWolf };
@@ -793,7 +843,7 @@ function planDayLine(game: LiveGame, me: Player, at: number): Plan {
     const target = top && top.player.id !== attacker?.id && top.score > 0 ? top.player : attacker ?? top?.player ?? null;
     return { kind: "deflect", t: target, a: attacker, reason: top?.reason };
   }
-  if (top && top.score >= 1 && rnd() < 0.6) return { kind: "accuse", t: top.player, reason: top.reason };
+  if (!early && top && top.score >= 1 && rnd() < 0.55) return { kind: "accuse", t: top.player, reason: top.reason };
   if (p > 0.7 && !hasMajority(game) && rnd() < 0.5) {
     const mine = byId(game, game.votes[me.id]);
     const target = mine ?? top?.player ?? leadP;
@@ -808,9 +858,16 @@ function planDayLine(game: LiveGame, me: Player, at: number): Plan {
   const talkers = quietGrace(game, at) ? everyone.filter((x) => spokeToday(game, x.id)) : everyone;
   const pool = talkers.length ? talkers : everyone;
   const someone = top && top.score > 0.3 ? top.player : pool.length ? pool[Math.floor(rnd() * pool.length)]! : null;
-  if (r < 0.3) return { kind: "question", t: someone };
-  if (r < 0.6) return { kind: "small" };
-  if (r < 0.85) return { kind: "accuse", t: someone, reason: top?.reason };
+  if (early) {
+    // Low info: bias heavily to small / open question, never accuse silence.
+    if (r < 0.45) return { kind: "small" };
+    if (r < 0.8) return { kind: "question", t: someone && spokeToday(game, someone.id) ? someone : null };
+    const mineEarly = byId(game, game.votes[me.id]);
+    return mineEarly ? { kind: "vote", t: mineEarly } : { kind: "small" };
+  }
+  if (r < 0.35) return { kind: "question", t: someone };
+  if (r < 0.7) return { kind: "small" };
+  if (r < 0.85 && someone && (top?.score ?? 0) > 0.5) return { kind: "accuse", t: someone, reason: top?.reason };
   const mine = byId(game, game.votes[me.id]);
   return mine ? { kind: "vote", t: mine } : { kind: "small" };
 }
@@ -899,8 +956,15 @@ async function runSpeak(game: LiveGame, me: Player, at: number, budget: TickBudg
     m.nextSpeakAt = null;
     return;
   }
-  if (m.messagesToday >= (m.budgetToday ?? TALK[me.personality].budget)) {
+  const budgetCap = m.budgetToday ?? TALK[me.personality].budget;
+  if (m.messagesToday >= budgetCap) {
     m.nextSpeakAt = null;
+    return;
+  }
+  // Prefer quality over volume: near budget, skip optional speaks often.
+  if (m.messagesToday >= Math.max(1, budgetCap - 1) && rnd() < 0.55) {
+    const next = at + sampleGap(game, me, at) * 1.3;
+    m.nextSpeakAt = next < game.nextLockAt - MIN ? next : null;
     return;
   }
   const plan = planDayLine(game, me, at);
@@ -919,8 +983,12 @@ async function runReaction(game: LiveGame, me: Player, at: number, budget: TickB
   const r = m.reaction;
   m.reaction = null;
   if (!r || !me.alive || me.muted) return;
-  if ((m.reactionsToday ?? 0) >= MAX_REACTIONS_PER_DAY) return;
+  if ((m.reactionsToday ?? 0) >= maxReactionsFor(me.personality)) return;
   const about = byId(game, r.aboutId);
+  if (r.kind === "reply") {
+    // Nothing to reply to if the day still has no player chat (stale plan).
+    if (publicPlayerMessagesToday(game).length === 0) return;
+  }
   if (r.kind === "wolf_plan") {
     if (game.phase !== "night_wolves" || me.role !== "wolf") return;
     if (!game.night.wolfTarget) game.night.wolfTarget = pickWolfKill(game);
