@@ -71,8 +71,8 @@ export default function PlayPage() {
           </Link>
         </header>
 
-        <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-2 lg:gap-12 lg:py-10">
-          <section className="order-2 hidden max-w-xl lg:order-1 lg:block">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] flex-1 items-center gap-8 py-8 lg:grid-cols-2 lg:gap-12 lg:py-10">
+          <section className="order-2 hidden min-w-0 max-w-xl lg:order-1 lg:block">
             <p className="text-sm font-bold text-ember">מצטרפים לשולחן</p>
             <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">בעיירה כבר מחכים לך.<br />בשם אחר.</h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">

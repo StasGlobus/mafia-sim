@@ -126,8 +126,8 @@ export default function AdminHomePage() {
           </Link>
         </header>
 
-        <div className="grid flex-1 items-start gap-8 py-8 lg:grid-cols-[.75fr_1.25fr] lg:items-center lg:gap-12 lg:py-10">
-          <section className="order-2 max-w-lg lg:order-1">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] flex-1 items-start gap-8 py-8 lg:grid-cols-[.75fr_1.25fr] lg:items-center lg:gap-12 lg:py-10">
+          <section className="order-2 min-w-0 max-w-lg lg:order-1">
             <div className="hidden lg:block">
               <p className="text-sm font-bold text-ember">אתם מנהלים</p>
               <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">פותחים שולחן,<br />והעיירה מתעוררת.</h1>
@@ -155,7 +155,7 @@ export default function AdminHomePage() {
             </form>
           </section>
 
-          <section className="entry-panel order-1 rounded-2xl border border-white/10 p-4 backdrop-blur-xl sm:rounded-[30px] sm:p-8 lg:order-2" aria-labelledby="create-title">
+          <section className="entry-panel order-1 min-w-0 rounded-2xl border border-white/10 p-4 backdrop-blur-xl sm:rounded-[30px] sm:p-8 lg:order-2" aria-labelledby="create-title">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="create-title" className="font-display text-2xl">שולחן חדש</h2>

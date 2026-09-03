@@ -61,7 +61,7 @@ export default function Landing() {
           </Link>
         </header>
 
-        <section className="grid flex-1 items-center gap-12 py-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(430px,.95fr)] lg:py-10">
+        <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] flex-1 items-center gap-12 py-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(430px,.95fr)] lg:py-10">
           <div className="max-w-2xl">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-ember/30 bg-ember/10 px-3 py-1.5 text-xs font-bold text-red-100 backdrop-blur">
               <span className="relative flex h-2 w-2">
