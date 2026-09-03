@@ -114,13 +114,15 @@ export default function AdminHomePage() {
 
         <div className="grid flex-1 items-start gap-8 py-8 lg:grid-cols-[.75fr_1.25fr] lg:items-center lg:gap-12 lg:py-10">
           <section className="order-2 max-w-lg lg:order-1">
-            <p className="text-sm font-bold text-ember">אתם מנהלים</p>
-            <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">פותחים שולחן,<br />והכפר מתעורר.</h1>
-            <p className="mt-5 text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">
-              אתם בוחרים כמה שחקנים, כמה זאבים ובאיזה קצב. הבמאי מנהל את הלילות ודואג שכל משחק ייצא אחר.
-            </p>
+            <div className="hidden lg:block">
+              <p className="text-sm font-bold text-ember">אתם מנהלים</p>
+              <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">פותחים שולחן,<br />והכפר מתעורר.</h1>
+              <p className="mt-5 text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">
+                אתם בוחרים כמה שחקנים, כמה זאבים ובאיזה קצב. הבמאי מנהל את הלילות ודואג שכל משחק ייצא אחר.
+              </p>
+            </div>
 
-            <form onSubmit={openExisting} className="mt-8 rounded-2xl border border-white/10 bg-white/[.04] p-4">
+            <form onSubmit={openExisting} className="rounded-2xl border border-white/10 bg-white/[.04] p-4 lg:mt-8">
               <label htmlFor="existing-code" className="text-sm font-bold text-paper/65">חזרה לשולחן קיים</label>
               <div className="mt-2 flex gap-2">
                 <input
