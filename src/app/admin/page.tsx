@@ -14,6 +14,11 @@ function saveMe(code: string, me: { playerId: string; secret: string; fakeName: 
   }
 }
 
+const HOUR_OPTIONS = Array.from({ length: 48 }, (_, index) => {
+  const hour = String(Math.floor(index / 2)).padStart(2, "0");
+  return `${hour}:${index % 2 ? "30" : "00"}`;
+});
+
 function cleanRoomCode(value: string) {
   return value.replace(/[\s-]/g, "").toUpperCase().slice(0, ROOM_CODE_LENGTH);
 }
@@ -289,8 +294,18 @@ export default function AdminHomePage() {
                   })}
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <label className="text-sm"><span className="text-paper/50">פתיחה</span><input type="time" dir="ltr" value={dayStart} onChange={(event) => setDayStart(event.target.value)} className="mt-2 min-h-12 w-full min-w-0 rounded-xl border border-white/10 bg-black/25 px-3 text-base text-paper focus:border-ember/70 focus:outline-none" required /></label>
-                  <label className="text-sm"><span className="text-paper/50">סגירה</span><input type="time" dir="ltr" value={dayEnd} onChange={(event) => setDayEnd(event.target.value)} className="mt-2 min-h-12 w-full min-w-0 rounded-xl border border-white/10 bg-black/25 px-3 text-base text-paper focus:border-ember/70 focus:outline-none" required /></label>
+                  <label className="text-sm">
+                    <span className="text-paper/50">פתיחה</span>
+                    <select value={dayStart} onChange={(event) => setDayStart(event.target.value)} className="mt-2 min-h-12 w-full min-w-0 rounded-xl border border-white/10 bg-black/25 px-3 text-base text-paper focus:border-ember/70 focus:outline-none" required>
+                      {HOUR_OPTIONS.map((hour) => <option key={hour} value={hour}>{hour}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <span className="text-paper/50">סגירה</span>
+                    <select value={dayEnd} onChange={(event) => setDayEnd(event.target.value)} className="mt-2 min-h-12 w-full min-w-0 rounded-xl border border-white/10 bg-black/25 px-3 text-base text-paper focus:border-ember/70 focus:outline-none" required>
+                      {HOUR_OPTIONS.map((hour) => <option key={hour} value={hour}>{hour}</option>)}
+                    </select>
+                  </label>
                 </div>
               </fieldset>
 
