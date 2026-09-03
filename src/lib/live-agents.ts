@@ -633,7 +633,7 @@ function hintFor(game: LiveGame, kind: SpeakKind, o: SayOptions, at: number): st
     case "question":
       return `לשאול את ${t} שאלה ישירה וקצרה על ההצבעה או ההתנהגות שלו.`;
     case "small":
-      return "להגיד משהו קצר על המצב בכפר, בלי להאשים אף אחד.";
+      return "להגיד משהו קצר על המצב בעיירה, בלי להאשים אף אחד.";
     case "vote":
       return `להודיע שאתה מצביע על ${t}.${why}`;
     case "panic":
@@ -993,7 +993,7 @@ async function runClosing(game: LiveGame, me: Player, at: number, budget: TickBu
     if (rnd() < pull) {
       setVote(game, me, lead, at);
       const t = byId(game, lead);
-      if (t && rnd() < 0.5) await say(game, me, "vote", at, budget, { t, reason: "רוב הכפר כבר שם" });
+      if (t && rnd() < 0.5) await say(game, me, "vote", at, budget, { t, reason: "רוב העיירה כבר שם" });
       return;
     }
   }

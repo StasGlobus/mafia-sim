@@ -30,7 +30,7 @@ function fallbackDecision(allowed: DirectorEventType[]): DirectorDecision | null
     omen: "עקבות סותרות נמצאו ליד הכיכר. אחד משני שמות ייחשף כרמז.",
     silence: "מישהו קיבל איום מתחת לדלת. היום הוא לא יוכל לדבר.",
     lost_vote: "פתק הצבעה נקרע בלילה. קול אחד לא ייספר היום.",
-    leak: "לחישה מחדר הזאבים דלפה אל הכפר.",
+    leak: "לחישה מחדר הזאבים דלפה אל העיירה.",
     blood_moon: "הירח האדים. הלילה הזה גבה מחיר נוסף.",
   };
   return { type, narration: lines[type] };

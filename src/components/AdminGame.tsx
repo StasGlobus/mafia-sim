@@ -50,7 +50,7 @@ async function liveApi(body: Record<string, unknown>) {
     needsAuth?: boolean;
   };
   if (res.status === 403) {
-    const err = new Error(data.error ?? "רק המנהל") as Error & { status: number };
+    const err = new Error(data.error ?? "רק מי שפתח את השולחן") as Error & { status: number };
     err.status = 403;
     throw err;
   }
@@ -305,8 +305,8 @@ export default function AdminGame({ code }: { code: string }) {
   if (gate === "notHost") {
     return (
       <GateScreen
-        title="רק המנהל"
-        body="יש לך כניסה כשחקן, לא כמנהל. ניהול רק למי שפתח את השולחן."
+        title="רק מי שפתח את השולחן"
+        body="נכנסת כשחקן, לא כמי שפתח את השולחן. הניהול שמור לו."
         code={code}
       />
     );
@@ -316,7 +316,7 @@ export default function AdminGame({ code }: { code: string }) {
     return (
       <GateScreen
         title="ניהול רק למי שפתח"
-        body="אין כאן כניסה עם שם. אם באת לשחק — כנס במסך השחקנים. אם אתה המנהל, פתח מהמכשיר שבו יצרת את השולחן."
+        body="אין כאן כניסה מזוהה. אם באתם לשחק, כנסו במסך השחקנים. אם פתחתם את השולחן, פתחו מהמכשיר שבו יצרתם אותו."
         code={code}
       />
     );

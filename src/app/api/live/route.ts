@@ -84,7 +84,7 @@ function secretFrom(req: NextRequest, body: { code?: string; secret?: string }, 
 export async function GET(req: NextRequest) {
   try {
     const code = (req.nextUrl.searchParams.get("code") ?? "").trim().toUpperCase();
-    if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
+    if (!code) return NextResponse.json({ error: "חסר קוד משחק" }, { status: 400 });
     const secret = secretFrom(req, { code }, code);
     const asAdmin = req.nextUrl.searchParams.get("asAdmin") === "true";
     if (!secret) {
@@ -149,8 +149,8 @@ export async function POST(req: NextRequest) {
     }
 
     const secret = secretFrom(req, { code, secret: typeof body.secret === "string" ? body.secret : undefined }, code);
-    if (!code) return NextResponse.json({ error: "חסר קוד" }, { status: 400 });
-    if (!secret) return NextResponse.json({ error: "חסר מפתח" }, { status: 401 });
+    if (!code) return NextResponse.json({ error: "חסר קוד משחק" }, { status: 400 });
+    if (!secret) return NextResponse.json({ error: "לא מצאנו אותך בשולחן הזה. כנסו מחדש עם הקוד" }, { status: 401 });
 
     const asAdmin = body.asAdmin === true;
 
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
       const game = await getLive(code);
       if (!game) return NextResponse.json({ error: "אין משחק כזה" }, { status: 404 });
       const me = findPlayerBySecret(game, secret);
-      if (!me) return NextResponse.json({ error: "לא מזוהה" }, { status: 401 });
+      if (!me) return NextResponse.json({ error: "לא מצאנו אותך בשולחן הזה. כנסו מחדש עם הקוד" }, { status: 401 });
       const sub = body.subscription as { endpoint?: unknown } | undefined;
       const endpoint = typeof sub?.endpoint === "string" ? sub.endpoint : typeof body.endpoint === "string" ? body.endpoint : "";
       if (!endpoint || !/^https:\/\//.test(endpoint)) return NextResponse.json({ error: "מנוי לא תקין" }, { status: 400 });
@@ -225,11 +225,11 @@ export async function POST(req: NextRequest) {
 
 function storageError(error: unknown) {
   if (error instanceof LiveStoreConflictError) {
-    return NextResponse.json({ error: "המשחק עודכן על ידי שחקן אחר. רענן ונסה שוב." }, { status: 409 });
+    return NextResponse.json({ error: "מישהו הקדים אותך בשנייה. נסו שוב." }, { status: 409 });
   }
   if (error instanceof LiveStoreUnavailableError) {
-    return NextResponse.json({ error: "שמירת המשחק אינה זמינה כרגע. נסה שוב בעוד רגע." }, { status: 503 });
+    return NextResponse.json({ error: "השמירה לא זמינה כרגע. עוד רגע ננסה שוב." }, { status: 503 });
   }
   console.error("Live game API failed", error);
-  return NextResponse.json({ error: "שגיאת שרת" }, { status: 500 });
+  return NextResponse.json({ error: "משהו נשבר אצלנו. נסו שוב עוד רגע." }, { status: 500 });
 }

@@ -63,7 +63,7 @@ export default function PlayPage() {
         <header className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 rounded-xl text-sm font-bold text-paper/70 transition hover:text-paper">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5" aria-hidden="true">→</span>
-            חזרה לכפר
+            חזרה לעיירה
           </Link>
           <Link href="/" className="flex items-center gap-2 text-sm font-black">
             <Image src="/art/icon.png" alt="" width={32} height={32} className="h-8 w-8 rounded-[10px]" />
@@ -74,9 +74,9 @@ export default function PlayPage() {
         <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-2 lg:gap-12 lg:py-10">
           <section className="order-2 hidden max-w-xl lg:order-1 lg:block">
             <p className="text-sm font-bold text-ember">מצטרפים לשולחן</p>
-            <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">בכפר כבר מחכים לך.<br />בשם אחר.</h1>
+            <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">בעיירה כבר מחכים לך.<br />בשם אחר.</h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">
-              צריך רק את הקוד שקיבלתם מהמנהל. הוא גם קובע אם משחקים בשמות אמיתיים או שכל אחד מקבל שם אחר.
+              צריך רק את הקוד שקיבלתם ממי שפתח את השולחן. שם נקבע גם אם משחקים בשמות אמיתיים או שכל אחד מקבל שם אחר.
             </p>
             <div className="mt-8 hidden gap-3 text-sm text-paper/55 sm:flex">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">5–12 שחקנים</span>
@@ -103,7 +103,7 @@ export default function PlayPage() {
                   maxLength={24}
                   required
                 />
-                <span className="mt-2 block text-xs text-paper/40">המשחק יציג אותו רק אם המנהל בחר שמות אמיתיים.</span>
+                <span className="mt-2 block text-xs text-paper/40">המשחק יציג אותו רק אם השולחן משחק בשמות אמיתיים.</span>
                 <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label="איך לפנות אליך">
                   {([["m", "פונים אליי בזכר"], ["f", "פונים אליי בנקבה"]] as const).map(([id, label]) => (
                     <button key={id} type="button" role="radio" aria-checked={gender === id} onClick={() => setGender(id)} className={`min-h-10 rounded-xl border text-xs font-bold transition ${gender === id ? "border-paper/50 bg-paper/10 text-paper" : "border-white/10 bg-white/[.03] text-paper/50"}`}>{label}</button>
@@ -134,7 +134,7 @@ export default function PlayPage() {
                 disabled={busy || !realName.trim() || code.length !== ROOM_CODE_LENGTH}
                 className="min-h-16 w-full rounded-2xl bg-paper px-5 text-lg font-black text-ink shadow-[0_14px_35px_rgba(0,0,0,.2)] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-35"
               >
-                {busy ? "נכנסים…" : "קחו אותי לכפר"}
+                {busy ? "נכנסים…" : "קחו אותי לעיירה"}
               </button>
             </form>
 

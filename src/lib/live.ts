@@ -451,14 +451,14 @@ function enterDay(game: LiveGame, at: number, dayNumber: number) {
   const closing = isQuick(game)
     ? `בעוד ${rulesFor(game).quickDayMinutes} דקות`
     : `ב${prettyJerusalem(game.nextLockAt).replace(/^יום \S+ /, "")}`;
-  announce(game, `☀ יום ${dayNumber}. ${alive} בכפר. מדברים, מצביעים, ההצבעה ננעלת ${closing}.`, at, "recap");
+  announce(game, `☀ יום ${dayNumber}. ${alive} בעיירה. מדברים, מצביעים, ההצבעה ננעלת ${closing}.`, at, "recap");
   if (dayNumber > 1) {
     const kill = game.lastKill;
     const body = kill?.saved
       ? "ניסו להרוג בלילה ומישהו שמר. כולם חיים."
       : kill?.name
         ? `${kill.name} ${game.players.find((p) => p.id === kill.playerId)?.gender === "f" ? "נמצאה מתה" : "נמצא מת"}. ${kill.role ? `${game.players.find((p) => p.id === kill.playerId)?.gender === "f" ? "הייתה" : "היה"} ${ROLE_HE[kill.role]}.` : ""} ${alive} נשארו.`
-        : `הלילה עבר בלי גופה. ${alive} בכפר.`;
+        : `הלילה עבר בלי גופה. ${alive} בעיירה.`;
     queuePush(game, { kind: "morning", playerIds: humanIds(game), title: `☀ יום ${dayNumber} ב-AiYara`, body: `${body} ההצבעה ננעלת ${closing}.`, tag: `morning-${dayNumber}`, at });
   }
 }
@@ -466,7 +466,7 @@ function enterDay(game: LiveGame, at: number, dayNumber: number) {
 function enterNight(game: LiveGame, at: number) {
   const nightEnd = isQuick(game) ? at + rulesFor(game).quickNightMinutes * MIN : nextPlayDayStart(at, game.schedule);
   const morning = isQuick(game) ? `בעוד ${rulesFor(game).quickNightMinutes} דקות` : prettyJerusalem(nightEnd);
-  announce(game, `🌙 לילה. הכפר נסגר, הזאבים עובדים. הבוקר ${morning}.`, at, "recap");
+  announce(game, `🌙 לילה. העיירה נסגרת, הזאבים עובדים. הבוקר ${morning}.`, at, "recap");
   game.night = { wolfTarget: null, seerTarget: null, doctorTarget: null };
   game.phase = "night_wolves";
   game.openChannel = "wolves";
@@ -484,7 +484,7 @@ function enterNight(game: LiveGame, at: number) {
   }
   if (!isQuick(game)) {
     const others = humanIds(game).filter((id) => !wolves.includes(id));
-    queuePush(game, { kind: "night", playerIds: others, title: "🌙 לילה בעיירה", body: `הכפר נסגר. הבוקר ${morning}.`, tag: `night-${game.dayNumber}`, at });
+    queuePush(game, { kind: "night", playerIds: others, title: "🌙 לילה בעיירה", body: `העיירה נסגרת. הבוקר ${morning}.`, tag: `night-${game.dayNumber}`, at });
   }
 }
 
@@ -764,7 +764,7 @@ function viewOf(game: LiveGame, me: Player, now: number, extra?: { playerId: str
 }
 
 const NOT_FOUND: ActionResult = { ok: false, error: "אין משחק כזה", status: 404 };
-const UNAUTHORIZED: ActionResult = { ok: false, error: "לא מזוהה", status: 401 };
+const UNAUTHORIZED: ActionResult = { ok: false, error: "לא מצאנו אותך בשולחן הזה. כנסו מחדש עם הקוד", status: 401 };
 
 /**
  * Load, change and save a game. When another request saved first, the change
@@ -840,7 +840,7 @@ async function advanceForWrite(game: LiveGame, now: number): Promise<ActionResul
   if (game.status !== "running") return null;
   await catchUp(game, now, makeBudget({ maxLlm: 0, maxEvents: 60, deadlineMs: 6_000 }));
   if (game.status === "running" && now >= game.nextLockAt) {
-    return { ok: false, error: "המשחק מתעדכן, נסה שוב בעוד רגע", status: 409 };
+    return { ok: false, error: "העיירה מתעדכנת, שנייה ונסו שוב", status: 409 };
   }
   return null;
 }
@@ -854,7 +854,7 @@ export async function createLiveGame(input: {
   rules?: Partial<LiveRules>;
 }): Promise<ActionResult> {
   const realName = cleanName(input.realName);
-  if (!realName) return { ok: false, error: "צריך שם", status: 400 };
+  if (!realName) return { ok: false, error: "צריך שם, עד 24 תווים", status: 400 };
   const schedule = parseSchedule(input);
   if ("error" in schedule) return { ok: false, error: schedule.error, status: 400 };
   const rules = parseRules(input.rules ?? {});
@@ -903,9 +903,9 @@ export async function joinLiveGame(input: { code: string; realName: string; gend
     }
     if (game.phase !== "lobby") return { ok: false, error: "המשחק כבר התחיל", status: 400 };
     const rules = rulesFor(game);
-    if (game.players.length >= rules.seats) return { ok: false, error: "מלא", status: 400 };
+    if (game.players.length >= rules.seats) return { ok: false, error: "השולחן מלא", status: 400 };
     const realName = cleanName(input.realName);
-    if (!realName) return { ok: false, error: "צריך שם", status: 400 };
+    if (!realName) return { ok: false, error: "צריך שם, עד 24 תווים", status: 400 };
     const gender = parseGender(input.gender, realName);
     const secret = created?.secret ?? makeSecret();
     const player: Player = {
@@ -934,8 +934,8 @@ export async function startLiveGame(input: { code: string; secret: string }): Pr
   return mutate(code, async (game, now) => {
     const me = findPlayerBySecret(game, input.secret);
     if (!me) return UNAUTHORIZED;
-    if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
-    if (game.phase !== "lobby") return { ok: false, error: "כבר התחיל", status: 400 };
+    if (me.id !== game.hostId) return { ok: false, error: "רק מי שפתח את השולחן יכול לעשות את זה", status: 403 };
+    if (game.phase !== "lobby") return { ok: false, error: "המשחק כבר התחיל", status: 400 };
     const humans = game.players.filter((p) => p.kind === "human");
     const rules = rulesFor(game);
     if (rules.botMode === "humans_only" && humans.length < rules.seats) {
@@ -991,7 +991,7 @@ export async function startLiveGame(input: { code: string; secret: string }): Pr
       game.waitWeekday = win.waitWeekday;
       game.openChannel = openFor("wait");
       setElapsed(game, now);
-      announce(game, `הכפר סגור עכשיו. היום הראשון נפתח ב${prettyJerusalem(win.nextLockAt)}.`, now);
+      announce(game, `העיירה סגורה עכשיו. היום הראשון נפתח ב${prettyJerusalem(win.nextLockAt)}.`, now);
     }
 
     await catchUp(game, now, makeBudget({ maxLlm: 0 }));
@@ -1008,7 +1008,7 @@ export async function liveGet(input: { code: string; secret: string }): Promise<
 export async function liveAdminGet(input: { code: string; secret: string }): Promise<ActionResult> {
   const loaded = await loadForRead(input.code.trim(), input.secret);
   if ("ok" in loaded) return loaded;
-  if (loaded.me.id !== loaded.game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+  if (loaded.me.id !== loaded.game.hostId) return { ok: false, error: "רק מי שפתח את השולחן יכול לעשות את זה", status: 403 };
   return { ok: true, game: adminView(loaded.game, loaded.me, loaded.now) };
 }
 
@@ -1020,14 +1020,14 @@ export async function liveSay(input: { code: string; secret: string; text: strin
     if (busy) return busy;
 
     const text = typeof input.text === "string" ? input.text.replace(/\s+/g, " ").trim() : "";
-    if (!text) return { ok: false, error: "ריק", status: 400 };
-    if (text.length > 240) return { ok: false, error: "ארוך מדי", status: 400 };
-    if (!me.alive) return { ok: false, error: "מתים לא כותבים", status: 400 };
-    if (me.muted) return { ok: false, error: "נסתמת היום", status: 400 };
+    if (!text) return { ok: false, error: "כתבו משהו לפני ששולחים", status: 400 };
+    if (text.length > 240) return { ok: false, error: "ארוך מדי. עד 240 תווים", status: 400 };
+    if (!me.alive) return { ok: false, error: "מי שמת קורא בשקט. אפשר לעקוב, לא לכתוב", status: 400 };
+    if (me.muted) return { ok: false, error: "הבמאי השתיק אותך היום. מחר מדברים", status: 400 };
 
     const wolfOk = game.phase === "night_wolves" && me.role === "wolf" && game.openChannel === "wolves";
     const dayOk = game.phase === "day" && game.openChannel === "public";
-    if (!wolfOk && !dayOk) return { ok: false, error: "הצ'אט סגור עכשיו", status: 400 };
+    if (!wolfOk && !dayOk) return { ok: false, error: "העיירה סגורה עכשיו. מדברים ביום", status: 400 };
 
     const sent = uniquePush(game, {
       channel: wolfOk ? "wolves" : "public",
@@ -1050,11 +1050,11 @@ export async function liveVote(input: { code: string; secret: string; targetId: 
     if (!me) return UNAUTHORIZED;
     const busy = await advanceForWrite(game, now);
     if (busy) return busy;
-    if (game.phase !== "day") return { ok: false, error: "לא עכשיו", status: 400 };
-    if (!me.alive) return { ok: false, error: "מתים לא מצביעים", status: 400 };
-    if (me.cannotVote) return { ok: false, error: "אין לך הצבעה היום", status: 400 };
+    if (game.phase !== "day") return { ok: false, error: "מצביעים רק ביום", status: 400 };
+    if (!me.alive) return { ok: false, error: "מי שמת לא מצביע", status: 400 };
+    if (me.cannotVote) return { ok: false, error: "הפתק שלך נקרע. היום אין לך קול", status: 400 };
     const target = game.players.find((p) => p.id === input.targetId);
-    if (!target?.alive) return { ok: false, error: "על מי", status: 400 };
+    if (!target?.alive) return { ok: false, error: "אפשר לבחור רק מישהו שעדיין חי", status: 400 };
     if (game.votes[me.id] !== target.id) {
       game.votes[me.id] = target.id;
       onVote(game, me, target.id, now);
@@ -1070,20 +1070,20 @@ export async function liveNightPick(input: { code: string; secret: string; targe
     if (!me) return UNAUTHORIZED;
     const busy = await advanceForWrite(game, now);
     if (busy) return busy;
-    if (!me.alive) return { ok: false, error: "מתים לא פועלים", status: 400 };
+    if (!me.alive) return { ok: false, error: "מי שמת לא פועל בלילה", status: 400 };
     const target = game.players.find((p) => p.id === input.targetId);
-    if (!target?.alive) return { ok: false, error: "על מי", status: 400 };
+    if (!target?.alive) return { ok: false, error: "אפשר לבחור רק מישהו שעדיין חי", status: 400 };
     game.lastHumanActionAt = now;
 
     if (game.phase === "night_wolves" && me.role === "wolf") {
-      if (target.role === "wolf") return { ok: false, error: "לא על הזאבים", status: 400 };
+      if (target.role === "wolf") return { ok: false, error: "לא על חברי הלהקה", status: 400 };
       game.night.wolfTarget = target.id;
       return viewOf(game, me, now);
     }
     if (game.phase === "night_seer" && me.role === "seer") {
-      if (target.id === me.id) return { ok: false, error: "לא על עצמך", status: 400 };
+      if (target.id === me.id) return { ok: false, error: "הרואה לא בודק את עצמו", status: 400 };
       if (game.night.seerTarget && game.memories[me.id]?.known[game.night.seerTarget]) {
-        return { ok: false, error: "כבר בדקת הלילה", status: 400 };
+        return { ok: false, error: "כבר בדקת הלילה. התוצאה ביומן", status: 400 };
       }
       game.night.seerTarget = target.id;
       applySeerLook(game, me, target.id, now);
@@ -1093,7 +1093,7 @@ export async function liveNightPick(input: { code: string; secret: string; targe
       game.night.doctorTarget = target.id;
       return viewOf(game, me, now);
     }
-    return { ok: false, error: "לא התור שלך", status: 400 };
+    return { ok: false, error: "זה לא התור שלך עכשיו", status: 400 };
   });
 }
 
@@ -1102,18 +1102,18 @@ export async function endLiveGame(input: { code: string; secret: string }): Prom
   return mutate(input.code.trim(), async (game, now) => {
     const me = findPlayerBySecret(game, input.secret);
     if (!me) return UNAUTHORIZED;
-    if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+    if (me.id !== game.hostId) return { ok: false, error: "רק מי שפתח את השולחן יכול לעשות את זה", status: 403 };
     if (game.status === "ended") return { ok: true, game: adminView(game, me, now) };
     game.status = "ended";
     game.phase = "ended";
     game.openChannel = "none";
     game.winner = null;
-    game.winnerText = "המנהל סיים את המשחק.";
+    game.winnerText = "השולחן נסגר לפני הזמן.";
     game.nextLockAt = now;
-    announce(game, "המנהל סיים את המשחק לפני הזמן.", now, "alert");
+    announce(game, "השולחן נסגר לפני הזמן על ידי מי שפתח אותו.", now, "alert");
     endReveal(game, now);
-    game.eventLog.push(`יום ${game.dayNumber}: המנהל סיים את המשחק`);
-    queuePush(game, { kind: "game_over", playerIds: humanIds(game), title: "המשחק נגמר", body: "המנהל סיים את המשחק. הקלפים על השולחן.", tag: "game_over", at: now });
+    game.eventLog.push(`יום ${game.dayNumber}: השולחן נסגר לפני הזמן`);
+    queuePush(game, { kind: "game_over", playerIds: humanIds(game), title: "המשחק נגמר", body: "השולחן נסגר לפני הזמן. הקלפים על השולחן.", tag: "game_over", at: now });
     return { ok: true, game: adminView(game, me, now) };
   });
 }
@@ -1128,7 +1128,7 @@ export async function setLiveSchedule(input: {
   return mutate(input.code.trim(), async (game, now) => {
     const me = findPlayerBySecret(game, input.secret);
     if (!me) return UNAUTHORIZED;
-    if (me.id !== game.hostId) return { ok: false, error: "רק המנהל", status: 403 };
+    if (me.id !== game.hostId) return { ok: false, error: "רק מי שפתח את השולחן יכול לעשות את זה", status: 403 };
     if (game.phase !== "lobby") return { ok: false, error: "אפשר לשנות שעות רק לפני שמתחילים", status: 400 };
     const schedule = parseSchedule(input);
     if ("error" in schedule) return { ok: false, error: schedule.error, status: 400 };

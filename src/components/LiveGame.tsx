@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import Link from "next/link";
 import type { ChatMessage, Gender, LiveView, Phase } from "@/lib/types";
 import { ROLE_ART, ROLE_HE } from "@/lib/types";
+import { hebrewVoices, loadNarrationMode, saveNarrationMode, speak, speechSupported, stopSpeaking, type NarrationMode } from "@/lib/tts";
 
 type Tab = "village" | "role" | "people" | "me";
 type StoredMe = { playerId: string; secret: string; fakeName: string };
@@ -73,7 +74,7 @@ function phaseHint(view: LiveView): string {
   if (view.waitText) return view.waitText;
   switch (view.phase) {
     case "lobby":
-      return "מחכים שהמנהל יתחיל";
+      return "מחכים שהמשחק יתחיל";
     case "day":
       return "מדברים, אחר כך מצביעים";
     case "night_wolves":
@@ -96,7 +97,7 @@ function phaseToast(view: LiveView): string | null {
     case "day":
       return `☀ יום ${view.dayNumber}. מדברים, אחר כך מצביעים.`;
     case "night_wolves":
-      return view.me.role === "wolf" && view.me.alive ? "🌙 לילה. התור שלך: בחר מי מת." : "🌙 לילה. הכפר נסגר.";
+      return view.me.role === "wolf" && view.me.alive ? "🌙 לילה. התור שלך: בחר מי מת." : "🌙 לילה. העיירה נסגרת.";
     case "night_seer":
       return view.me.role === "seer" && view.me.alive ? "🔮 הלילה שלך. בחר מי לבדוק." : null;
     case "night_doctor":
@@ -204,6 +205,9 @@ export default function LiveGame({ code }: { code: string }) {
   const [showReveal, setShowReveal] = useState(false);
   const [shared, setShared] = useState(false);
   const [pushState, setPushState] = useState<PushState>("unknown");
+  const [narration, setNarration] = useState<NarrationMode>("off");
+  const [voiceInfo, setVoiceInfo] = useState<"unknown" | "ready" | "missing" | "unsupported">("unknown");
+  const spokenUpTo = useRef<number>(0);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushDismissed, setPushDismissed] = useState(true);
   const failures = useRef(0);
@@ -334,6 +338,45 @@ export default function LiveGame({ code }: { code: string }) {
       }
     }
   }, [view?.phase, view]);
+
+  // Narration: remember the choice, and find out whether this device has a Hebrew voice.
+  useEffect(() => {
+    setNarration(loadNarrationMode());
+    if (!speechSupported()) {
+      setVoiceInfo("unsupported");
+      return;
+    }
+    void hebrewVoices().then((voices) => setVoiceInfo(voices.length ? "ready" : "missing"));
+  }, []);
+
+  // Read aloud what arrives after narration was switched on. Never the history.
+  useEffect(() => {
+    if (!view || narration === "off") return;
+    if (spokenUpTo.current === 0) {
+      spokenUpTo.current = Date.now();
+      return;
+    }
+    const fresh = view.messages.filter((m) => m.ts > spokenUpTo.current && !m.id.startsWith("tmp-") && m.authorId !== view.me.playerId);
+    if (!fresh.length) return;
+    spokenUpTo.current = Math.max(...fresh.map((m) => m.ts));
+    for (const m of fresh) {
+      if (m.narrator) void speak(m.text);
+      else if (narration === "all") void speak(`${m.authorName}: ${m.text}`);
+    }
+  }, [view?.messages, narration, view]);
+
+  function setNarrationMode(mode: NarrationMode) {
+    setNarration(mode);
+    saveNarrationMode(mode);
+    if (mode === "off") {
+      stopSpeaking();
+      spokenUpTo.current = 0;
+      return;
+    }
+    spokenUpTo.current = Date.now();
+    // The first utterance comes from a tap, which is what iOS needs to unlock speech.
+    void speak(mode === "all" ? "הקריינות פועלת. אקריא כל הודעה." : "הקריינות פועלת. אקריא את הודעות המערכת.", { interrupt: true });
+  }
 
   // Web push: find out where we stand, and re-register an existing subscription for this game.
   useEffect(() => {
@@ -544,7 +587,7 @@ export default function LiveGame({ code }: { code: string }) {
           ← חזרה
         </Link>
         <h1 className="font-display mt-8 text-3xl">נכנסים</h1>
-        <p className="mt-2 text-dust">קוד {code}. השם האמיתי נשאר אצלך אם המנהל בחר שמות בדויים.</p>
+        <p className="mt-2 text-dust">קוד {code}. השם האמיתי נשאר אצלך אם השולחן משחק בשמות בדויים.</p>
         <form onSubmit={(e) => void join(e)} className="mt-8 space-y-3">
           <input
             className="min-h-12 w-full rounded-2xl bg-white/10 px-4 text-paper"
@@ -580,7 +623,7 @@ export default function LiveGame({ code }: { code: string }) {
             </Link>
           )}
         </div>
-        <h1 className="font-display mt-2 text-3xl">{view.me.isHost ? "השולחן שלך" : "מחכים שהמנהל יתחיל"}</h1>
+        <h1 className="font-display mt-2 text-3xl">{view.me.isHost ? "השולחן שלך" : "מחכים שהמשחק יתחיל"}</h1>
         <div className="mt-3 flex items-center gap-3">
           <div className="rounded-2xl bg-white/5 px-4 py-2 font-mono text-2xl font-black tracking-[.3em]">{view.code}</div>
           <button type="button" onClick={() => void share()} className="min-h-12 flex-1 rounded-2xl bg-paper font-extrabold text-ink">
@@ -631,7 +674,7 @@ export default function LiveGame({ code }: { code: string }) {
                     : "להתחיל"}
             </button>
           ) : (
-            <div className="min-h-12 rounded-2xl bg-white/5 text-center leading-[3rem] text-dust">מחכים שהמנהל יתחיל</div>
+            <div className="min-h-12 rounded-2xl bg-white/5 text-center leading-[3rem] text-dust">מחכים שהמשחק יתחיל</div>
           )}
           {err && <p className="text-center text-sm text-red-300">{err}</p>}
         </div>
@@ -693,6 +736,17 @@ export default function LiveGame({ code }: { code: string }) {
               ניהול
             </Link>
           )}
+          {voiceInfo === "ready" && (
+            <button
+              type="button"
+              onClick={() => setNarrationMode(narration === "off" ? "system" : "off")}
+              className={`flex h-11 w-11 items-center justify-center rounded-full text-sm ${narration === "off" ? "bg-white/10" : "bg-paper text-ink"}`}
+              aria-label={narration === "off" ? "להפעיל קריינות" : "לכבות קריינות"}
+              aria-pressed={narration !== "off"}
+            >
+              {narration === "off" ? "🔈" : "🔊"}
+            </button>
+          )}
           <Link href="/" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-sm" aria-label="בית">
             ⌂
           </Link>
@@ -730,7 +784,7 @@ export default function LiveGame({ code }: { code: string }) {
       )}
       {!view.me.alive && view.status !== "ended" && (
         <div className="bg-black px-4 py-3 text-center text-sm">
-          {view.me.gender === "f" ? "מתת. היית" : "מתת. היית"} {view.me.role ? ROLE_HE[view.me.role] : "?"}. אפשר לקרוא, לא לכתוב.
+          {view.me.gender === "f" ? "מתת. היית" : "מתת. היית"} {view.me.role ? ROLE_HE[view.me.role] : "?"}. אפשר לעקוב, לא לכתוב.
         </div>
       )}
       {view.waitText && <div className="bg-white/5 px-4 py-2 text-center text-sm text-dust">{view.waitText}</div>}
@@ -832,9 +886,9 @@ export default function LiveGame({ code }: { code: string }) {
                     ? tab === "role"
                       ? "הערוץ ייפתח כשיגיע שלב התפקיד שלך"
                       : night
-                        ? "לילה. הכפר ישן, בעלי התפקידים עובדים."
-                        : "כיכר הכפר סגורה עכשיו"
-                    : "רק קריאה"}
+                        ? "לילה. העיירה ישנה, בעלי התפקידים עובדים."
+                        : "העיירה סגורה עכשיו. מדברים ביום"
+                    : "מי שמת עוקב בשקט"}
               </div>
             )}
           </div>
@@ -926,6 +980,38 @@ export default function LiveGame({ code }: { code: string }) {
 
         <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${tab === "me" ? "block" : "hidden"}`}>
           <MePane view={view} onReveal={() => setShowReveal(true)} />
+          <div className="mt-3 rounded-2xl bg-white/5 p-4 text-sm">
+            <div className="font-extrabold">קריינות בעברית</div>
+            <p className="mt-1 text-xs leading-5 text-dust">
+              {voiceInfo === "unsupported"
+                ? "הדפדפן הזה לא תומך בהקראה."
+                : voiceInfo === "missing"
+                  ? "במכשיר הזה אין קול עברי. באנדרואיד מוסיפים אותו בהגדרות ← שפה ← טקסט לדיבור; באייפון בהגדרות ← נגישות ← תוכן מדובר."
+                  : "המכשיר יקריא בקול את מה שקורה בעיירה, כדי שאפשר לשחק גם בלי להסתכל על המסך."}
+            </p>
+            {voiceInfo === "ready" && (
+              <div className="mt-3 grid grid-cols-3 gap-2" role="radiogroup" aria-label="מצב קריינות">
+                {(
+                  [
+                    ["off", "כבוי"],
+                    ["system", "הודעות מערכת"],
+                    ["all", "הכל"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={narration === id}
+                    onClick={() => setNarrationMode(id)}
+                    className={`min-h-11 rounded-2xl border text-xs font-bold ${narration === id ? "border-paper/60 bg-paper/10 text-paper" : "border-white/10 bg-white/5 text-dust"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {view.status === "running" && (
             <div className="mt-3 rounded-2xl bg-white/5 p-4 text-sm">
               <div className="font-extrabold">התראות</div>
@@ -956,7 +1042,7 @@ export default function LiveGame({ code }: { code: string }) {
         <div className="mx-auto grid max-w-lg grid-cols-4">
           {(
             [
-              ["village", "כפר"],
+              ["village", "עיירה"],
               ["role", roleChannel ? "תפקיד •" : "תפקיד"],
               ["people", view.phase === "day" && view.me.canVote && !view.me.myVote ? "הצבעה !" : "שחקנים"],
               ["me", "אני"],
@@ -997,12 +1083,12 @@ function RoleReveal({
       <img src={ROLE_ART[role]} alt="" className="fixed inset-0 h-full w-full object-cover opacity-70" />
       <div className="fixed inset-0 bg-gradient-to-t from-black via-black/40 to-black/20" />
       <div className="relative flex min-h-full flex-col justify-end px-6 pb-8 pt-40 sm:pb-10">
-        <div className="text-sm font-bold text-ember">{aliases ? `בכפר קוראים לך ${name}` : name}</div>
+        <div className="text-sm font-bold text-ember">{aliases ? `בעיירה קוראים לך ${name}` : name}</div>
         <h1 className="mt-2 text-5xl font-black leading-none sm:text-6xl">{title}</h1>
         <p className="mt-3 max-w-md text-base leading-7 text-paper/85 sm:text-lg sm:leading-8">{roleMission(role, gender, pack)}</p>
         <p className="mt-2 text-xs text-paper/50 sm:text-sm">התפקיד סודי. הלשונית "אני" תזכיר לך אותו בכל רגע.</p>
         <button type="button" onClick={onClose} className="mt-5 min-h-14 w-full rounded-2xl bg-paper text-lg font-extrabold text-ink">
-          {role === "wolf" ? "לחייך ולהיכנס לכפר" : "להיכנס לכפר"}
+          {role === "wolf" ? "לחייך ולהיכנס לעיירה" : "להיכנס לעיירה"}
         </button>
       </div>
     </div>
@@ -1152,7 +1238,7 @@ function MePane({ view, onReveal }: { view: LiveView; onReveal: () => void }) {
             {!view.me.alive ? (view.me.gender === "f" ? " · מתה" : " · מת") : ""}
           </div>
           <div className="mt-1 text-xs text-dust">
-            {view.rules.identityMode === "aliases" ? `השם האמיתי שלך (רק אצלך): ${view.me.realName}` : "זה השם שמוצג בכפר"}
+            {view.rules.identityMode === "aliases" ? `השם האמיתי שלך (רק אצלך): ${view.me.realName}` : "זה השם שמוצג בעיירה"}
           </div>
         </div>
       </button>
@@ -1200,7 +1286,7 @@ function MePane({ view, onReveal }: { view: LiveView; onReveal: () => void }) {
       <div className="rounded-2xl bg-white/5 p-4 text-xs leading-relaxed text-dust">
         {view.rules.mode === "quick"
           ? `משחק מהיר. יום ${view.rules.quickDayMinutes} דקות, לילה ${view.rules.quickNightMinutes} דקות.`
-          : `משחק מתמשך. הכפר פתוח ${view.schedule.dayStart}–${view.schedule.dayEnd}. ההודעות מסומנות בשעה שנכתבו, גם אם לא הייתם כאן.`}
+          : `משחק מתמשך. העיירה פתוחה ${view.schedule.dayStart}–${view.schedule.dayEnd}. ההודעות מסומנות בשעה שנכתבו, גם אם לא הייתם כאן.`}
       </div>
     </div>
   );

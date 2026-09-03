@@ -118,7 +118,7 @@ export default function AdminHomePage() {
         <header className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 rounded-xl text-sm font-bold text-paper/70 transition hover:text-paper">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5" aria-hidden="true">→</span>
-            חזרה לכפר
+            חזרה לעיירה
           </Link>
           <Link href="/" className="flex items-center gap-2 text-sm font-black">
             <Image src="/art/icon.png" alt="" width={32} height={32} className="h-8 w-8 rounded-[10px]" />
@@ -166,7 +166,7 @@ export default function AdminHomePage() {
 
             <form id="create-game-form" onSubmit={create} className="mt-5 space-y-4 sm:mt-7 sm:space-y-6">
               <label className="block" htmlFor="host-name">
-                <span className="text-sm font-bold text-paper/75">שם המנהל</span>
+                <span className="text-sm font-bold text-paper/75">השם שלך</span>
                 <input
                   id="host-name"
                   className="mt-2 min-h-14 w-full rounded-2xl border border-white/10 bg-black/25 px-4 text-base text-paper placeholder:text-paper/25 focus:border-ember/70 focus:outline-none"
@@ -189,7 +189,7 @@ export default function AdminHomePage() {
                 value={mode}
                 onChange={(value) => setMode(value as GameMode)}
                 options={[
-                  ["scheduled", "מתמשך", "יום אחד בכל יום, לפי שעות הכפר"],
+                  ["scheduled", "מתמשך", "יום אחד בכל יום, לפי שעות העיירה"],
                   ["quick", "מהיר", "כל המשחק בישיבה אחת, בדקות"],
                 ]}
               />
@@ -216,7 +216,7 @@ export default function AdminHomePage() {
               )}
 
               <fieldset>
-                <legend className="text-sm font-bold text-paper/75">הרכב הכפר</legend>
+                <legend className="text-sm font-bold text-paper/75">הרכב העיירה</legend>
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
                     <span className="text-paper/50">שחקנים</span>
@@ -285,7 +285,7 @@ export default function AdminHomePage() {
 
               {mode === "scheduled" && (<>
               <fieldset>
-                <legend className="text-sm font-bold text-paper/75">מתי הכפר פתוח?</legend>
+                <legend className="text-sm font-bold text-paper/75">מתי העיירה פתוחה?</legend>
                 <p className="mt-1 text-xs leading-5 text-paper/40">בשעות היום מדברים ומצביעים. בלילה בעלי התפקידים פועלים.</p>
                 <div className="mt-3 flex gap-2">
                   {[["יום מלא", "10:00", "22:00"], ["ערב", "19:00", "23:00"]].map(([label, start, end]) => {
@@ -336,7 +336,7 @@ export default function AdminHomePage() {
               {err && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{err}</p>}
 
               <button type="submit" disabled={busy || !realName.trim()} className="sticky bottom-0 z-10 min-h-14 w-full rounded-2xl border-t border-white/10 bg-ember/95 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 text-lg font-black text-white shadow-[0_14px_35px_rgba(133,27,24,.3)] backdrop-blur-xl transition lg:static lg:border-0 lg:bg-ember lg:p-0 hover:bg-[#e65346] disabled:cursor-not-allowed disabled:opacity-35">
-                {busy ? "פותחים את הכפר…" : "פתיחת משחק"}
+                {busy ? "פותחים את העיירה…" : "פתיחת משחק"}
               </button>
             </form>
           </section>

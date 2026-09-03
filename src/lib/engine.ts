@@ -142,7 +142,7 @@ export function checkWin(state: GameState, at?: number): boolean {
     state.winner = "town";
     state.winnerText = "התושבים ניצחו. הזאבים נתלו.";
     state.openChannel = "none";
-    narrator(state, "התושבים ניצחו. הכפר נקי.", at);
+    narrator(state, "התושבים ניצחו. העיירה נקייה.", at);
     logEvent(state, "ניצחון תושבים", at);
     return true;
   }
@@ -152,7 +152,7 @@ export function checkWin(state: GameState, at?: number): boolean {
     state.winner = "wolves";
     state.winnerText = "הזאבים ניצחו.";
     state.openChannel = "none";
-    narrator(state, "הזאבים ניצחו. הכפר שלהם עכשיו.", at);
+    narrator(state, "הזאבים ניצחו. העיירה שלהם עכשיו.", at);
     logEvent(state, "ניצחון זאבים", at);
     return true;
   }
