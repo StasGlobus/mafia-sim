@@ -332,7 +332,7 @@ export default function AdminGame({ code }: { code: string }) {
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 px-3 py-2 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center gap-2">
           <div className="min-w-0 flex-1">
-            <div className="font-display text-base font-extrabold leading-tight">ניהול · {view.code}</div>
+            <div className="font-display text-base leading-tight">ניהול · {view.code}</div>
             <div className="truncate text-xs text-dust">
               {view.dayNumber ? `יום ${view.dayNumber} · ` : ""}
               {view.phaseLabel}
@@ -672,7 +672,7 @@ function GateScreen({ title, body, code }: { title: string; body: string; code: 
       <Link href="/admin" className="text-sm text-dust">
         ← חזרה
       </Link>
-      <h1 className="font-display mt-8 text-3xl font-extrabold">{title}</h1>
+      <h1 className="font-display mt-8 text-3xl">{title}</h1>
       <p className="mt-3 text-dust">{body}</p>
       <p className="mt-2 text-sm text-dust">קוד {code}</p>
       <div className="mt-auto space-y-3 pt-10">

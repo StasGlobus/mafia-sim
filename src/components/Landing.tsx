@@ -34,7 +34,7 @@ function SparkIcon() {
 
 export default function Landing() {
   return (
-    <main className="landing relative min-h-dvh overflow-hidden bg-night text-paper">
+    <main className="landing relative min-h-dvh overflow-x-clip bg-night text-paper">
       <Image
         src="/art/hero.png"
         alt=""
@@ -51,8 +51,8 @@ export default function Landing() {
           <Link href="/" className="group flex items-center gap-3 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ember">
             <Image src="/art/icon.png" alt="" width={48} height={48} className="h-11 w-11 rounded-[14px] object-cover ring-1 ring-white/15 transition-transform group-hover:scale-105" />
             <div>
-              <div className="font-display text-lg font-black leading-none tracking-tight">AiYara</div>
-              <div className="mt-1 text-[11px] font-medium tracking-[.18em] text-paper/55">העיירה לא נרדמת</div>
+              <div className="font-display text-lg leading-none">AiYara</div>
+              <div className="mt-1 text-[11px] font-medium tracking-[.14em] text-paper/55">הכפר לא נרדם</div>
             </div>
           </Link>
           <Link href="/sim" className="hidden items-center gap-2 rounded-full border border-white/15 bg-black/25 px-4 py-2.5 text-sm font-bold text-paper/75 backdrop-blur transition hover:border-white/30 hover:bg-white/10 hover:text-paper sm:flex">
@@ -68,15 +68,15 @@ export default function Landing() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
               </span>
-              משחק חברתי ל־5–12 שחקנים, אנשים ובוטים
+              5 עד 12 שחקנים. אנשים ובוטים באותו שולחן
             </div>
-            <h1 className="font-display max-w-xl text-[2.7rem] font-black leading-[1.02] tracking-[-.03em] sm:text-7xl lg:text-[5.2rem]">
-              מי בעיירה
+            <h1 className="font-display max-w-xl text-[2.5rem] sm:text-6xl lg:text-[4.6rem]">
+              אחד מהחברים שלכם
               <br />
-              <span className="text-ember">מסתיר שיניים?</span>
+              <span className="text-ember">הוא זאב.</span>
             </h1>
             <p className="mt-6 max-w-xl text-base font-medium leading-7 text-paper/80 sm:text-xl sm:leading-8">
-              מאפיה בעברית, בקצב שלכם: משחק מהיר של חצי שעה או עיירה שחיה ימים. מדברים ביום, פועלים בלילה, ושחקני AI ממלאים כל כיסא שנשאר ריק.
+              ביום מדברים ומצביעים, בלילה מישהו נעלם. אפשר לסגור משחק בחצי שעה, או למשוך אותו כמה ימים בקבוצה. חסרים שחקנים? בוטים מתיישבים במקומות הריקים, וקשה לדעת מי מהם.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:max-w-xl sm:flex-row">
@@ -91,9 +91,9 @@ export default function Landing() {
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-paper/65">
-              <span>בלי הורדה</span><span className="h-1 w-1 rounded-full bg-paper/25" />
-              <span>שם סודי לכל שחקן</span><span className="h-1 w-1 rounded-full bg-paper/25" />
-              <span>עובד גם לבד מול הבוטים</span>
+              <span>בלי להתקין כלום</span><span className="h-1 w-1 rounded-full bg-paper/25" />
+              <span>לכל אחד שם אחר בכפר</span><span className="h-1 w-1 rounded-full bg-paper/25" />
+              <span>אפשר גם לבד מול הבוטים</span>
             </div>
 
             <div className="role-strip mt-8 lg:hidden">
@@ -101,7 +101,7 @@ export default function Landing() {
                 <div key={role.name} className="relative h-40 overflow-hidden rounded-2xl border border-white/10">
                   <Image src={role.art} alt="" fill sizes="46vw" className="object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
-                  <div className={`absolute inset-x-0 bottom-0 p-3 font-display text-lg font-black ${role.tone}`}>{role.name}</div>
+                  <div className={`absolute inset-x-0 bottom-0 p-3 font-display text-lg ${role.tone}`}>{role.name}</div>
                 </div>
               ))}
             </div>
@@ -115,7 +115,7 @@ export default function Landing() {
                   <Image src={role.art} alt="" fill sizes="240px" className="object-cover transition duration-700 group-hover:scale-105" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-5">
-                    <div className={`font-display text-2xl font-black ${role.tone}`}>{role.name}</div>
+                    <div className={`font-display text-2xl ${role.tone}`}>{role.name}</div>
                     <p className="mt-1 text-xs font-medium text-paper/65">{role.detail}</p>
                   </div>
                 </div>
@@ -126,9 +126,9 @@ export default function Landing() {
 
         <section className="grid gap-2 border-t border-white/10 pt-5 sm:grid-cols-3" aria-label="איך משחקים">
           {[
-            ["01", "נכנסים בסוד", "מקבלים זהות אחרת בעיירה."],
-            ["02", "מדברים ומצביעים", "רוב מחליט מי יוצא מהמשחק."],
-            ["03", "שורדים את הלילה", "הזאבים צדים. בעלי התפקידים פועלים."],
+            ["01", "נכנסים עם קוד", "מקבלים שם אחר ותפקיד סודי."],
+            ["02", "מדברים ומצביעים", "מי שמקבל רוב יוצא מהמשחק."],
+            ["03", "עוברים את הלילה", "הזאבים צדים, הרואה והרופא פועלים."],
           ].map(([n, title, detail]) => (
             <div key={n} className="flex items-start gap-3 rounded-2xl px-2 py-2 sm:px-3">
               <span className="font-mono text-xs font-bold text-ember">{n}</span>

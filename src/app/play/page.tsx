@@ -53,7 +53,7 @@ export default function PlayPage() {
   }
 
   return (
-    <main className="entry-page relative min-h-dvh overflow-hidden text-paper">
+    <main className="entry-page relative min-h-dvh overflow-x-clip text-paper">
       <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[48%] lg:block">
         <Image src="/art/villager.png" alt="" fill sizes="48vw" className="object-cover object-[45%_center] opacity-45" priority />
         <div className="absolute inset-0 bg-gradient-to-l from-night via-night/45 to-night/10" />
@@ -73,20 +73,20 @@ export default function PlayPage() {
 
         <div className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-2 lg:gap-12 lg:py-10">
           <section className="order-2 max-w-xl lg:order-1">
-            <p className="text-sm font-black text-ember">הצטרפות למשחק</p>
-            <h1 className="font-display mt-3 text-3xl font-black leading-tight tracking-tight sm:text-6xl">העיירה מחכה<br />לזהות החדשה שלך.</h1>
+            <p className="text-sm font-bold text-ember">מצטרפים לשולחן</p>
+            <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">בכפר כבר מחכים לך.<br />בשם אחר.</h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">
-              נכנסים עם הקוד שקיבלתם מהמנהל. מנהל המשחק קובע אם הכפר משחק בזהויות אמיתיות או בשמות בדויים.
+              צריך רק את הקוד שקיבלתם מהמנהל. הוא גם קובע אם משחקים בשמות אמיתיים או שכל אחד מקבל שם אחר.
             </p>
             <div className="mt-8 hidden gap-3 text-sm text-paper/55 sm:flex">
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">5–12 שחקנים</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">עם או בלי שחקני AI</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">אנשים, בוטים, או שניהם</span>
             </div>
           </section>
 
           <section className="entry-panel order-1 rounded-[30px] border border-white/10 p-5 backdrop-blur-xl sm:p-8 lg:order-2" aria-labelledby="join-title">
             <div className="mb-7">
-              <h2 id="join-title" className="font-display text-2xl font-black">כניסה לשולחן</h2>
+              <h2 id="join-title" className="font-display text-2xl">כניסה לשולחן</h2>
               <p className="mt-1 text-sm text-paper/50">שני פרטים — ואתם בפנים.</p>
             </div>
 

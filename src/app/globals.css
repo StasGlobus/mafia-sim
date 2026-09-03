@@ -17,6 +17,7 @@ body {
 
 body {
   margin: 0;
+  font-family: var(--font-heebo), system-ui, "Arial Hebrew", Arial, sans-serif;
   background: var(--night);
   color: var(--paper);
   font-size: 16px;
@@ -176,4 +177,21 @@ a:focus-visible {
     scroll-snap-align: start;
     flex: 0 0 46%;
   }
+}
+
+
+/* Hebrew display face: single weight, needs room for descenders. */
+.font-display {
+  font-family: var(--font-display), var(--font-heebo), system-ui, sans-serif;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.16 !important;
+  padding-bottom: 0.06em;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
 }

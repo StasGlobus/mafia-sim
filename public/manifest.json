@@ -1,7 +1,7 @@
 {
   "name": "AiYara",
   "short_name": "AiYara",
-  "description": "עיירה, זאבים ובוטים. מאפיה בעברית ל־5–12 שחקנים.",
+  "description": "זאבים, אנשים ובוטים. משחק בעברית ל־5–12 שחקנים.",
   "start_url": "/",
   "display": "standalone",
   "dir": "rtl",

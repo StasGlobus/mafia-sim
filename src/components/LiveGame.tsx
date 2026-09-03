@@ -508,7 +508,7 @@ export default function LiveGame({ code }: { code: string }) {
 
   async function share() {
     const url = `${window.location.origin}/g/${code}`;
-    const payload = { title: "AiYara", text: `בואו לשחק AiYara, מאפיה עם בוטים. הקוד ${code}`, url };
+    const payload = { title: "AiYara", text: `בואו לשחק AiYara. זאבים, אנשים ובוטים. הקוד ${code}`, url };
     try {
       if (navigator.share) {
         await navigator.share(payload);
@@ -543,7 +543,7 @@ export default function LiveGame({ code }: { code: string }) {
         <Link href="/play" className="text-sm text-dust">
           ← חזרה
         </Link>
-        <h1 className="font-display mt-8 text-3xl font-extrabold">נכנסים</h1>
+        <h1 className="font-display mt-8 text-3xl">נכנסים</h1>
         <p className="mt-2 text-dust">קוד {code}. השם האמיתי נשאר אצלך אם המנהל בחר שמות בדויים.</p>
         <form onSubmit={(e) => void join(e)} className="mt-8 space-y-3">
           <input
@@ -580,7 +580,7 @@ export default function LiveGame({ code }: { code: string }) {
             </Link>
           )}
         </div>
-        <h1 className="font-display mt-2 text-3xl font-extrabold">{view.me.isHost ? "השולחן שלך" : "מחכים שהמנהל יתחיל"}</h1>
+        <h1 className="font-display mt-2 text-3xl">{view.me.isHost ? "השולחן שלך" : "מחכים שהמנהל יתחיל"}</h1>
         <div className="mt-3 flex items-center gap-3">
           <div className="rounded-2xl bg-white/5 px-4 py-2 font-mono text-2xl font-black tracking-[.3em]">{view.code}</div>
           <button type="button" onClick={() => void share()} className="min-h-12 flex-1 rounded-2xl bg-paper font-extrabold text-ink">
@@ -673,7 +673,7 @@ export default function LiveGame({ code }: { code: string }) {
       <header className="sticky top-0 z-20 border-b border-white/10 bg-black/50 px-3 py-2 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center gap-2">
           <div className="min-w-0 flex-1">
-            <div className="font-display text-base font-extrabold leading-tight">{night ? "🌙 " : ""}AiYara</div>
+            <div className="font-display text-base leading-tight">{night ? "🌙 " : ""}AiYara</div>
             <div className="truncate text-xs text-dust">
               {view.dayNumber ? `יום ${view.dayNumber} · ` : ""}
               {phaseHint(view)}

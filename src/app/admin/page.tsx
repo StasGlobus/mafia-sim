@@ -94,7 +94,7 @@ export default function AdminHomePage() {
   }
 
   return (
-    <main className="entry-page relative min-h-dvh overflow-hidden text-paper">
+    <main className="entry-page relative min-h-dvh overflow-x-clip text-paper">
       <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[43%] lg:block">
         <Image src="/art/doctor.png" alt="" fill sizes="43vw" className="object-cover object-[45%_center] opacity-35" priority />
         <div className="absolute inset-0 bg-gradient-to-l from-night via-night/50 to-night/10" />
@@ -114,10 +114,10 @@ export default function AdminHomePage() {
 
         <div className="grid flex-1 items-start gap-8 py-8 lg:grid-cols-[.75fr_1.25fr] lg:items-center lg:gap-12 lg:py-10">
           <section className="order-2 max-w-lg lg:order-1">
-            <p className="text-sm font-black text-ember">ניהול משחק</p>
-            <h1 className="font-display mt-3 text-3xl font-black leading-tight tracking-tight sm:text-6xl">אתם פותחים.<br />העיירה מתעוררת.</h1>
+            <p className="text-sm font-bold text-ember">אתם מנהלים</p>
+            <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">פותחים שולחן,<br />והכפר מתעורר.</h1>
             <p className="mt-5 text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">
-              אתם קובעים את ההרכב, הזהויות וקצב הכאוס. במאי AI מנהל את הלילה ושומר שכל משחק יתפתח אחרת.
+              אתם בוחרים כמה שחקנים, כמה זאבים ובאיזה קצב. הבמאי מנהל את הלילות ודואג שכל משחק ייצא אחר.
             </p>
 
             <form onSubmit={openExisting} className="mt-8 rounded-2xl border border-white/10 bg-white/[.04] p-4">
@@ -142,7 +142,7 @@ export default function AdminHomePage() {
           <section className="entry-panel order-1 rounded-[30px] border border-white/10 p-5 backdrop-blur-xl sm:p-8 lg:order-2" aria-labelledby="create-title">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 id="create-title" className="font-display text-2xl font-black">שולחן חדש</h2>
+                <h2 id="create-title" className="font-display text-2xl">שולחן חדש</h2>
                 <p className="mt-1 text-sm text-paper/50">הקוד יופיע מיד אחרי הפתיחה.</p>
               </div>
               <span className="rounded-full border border-ember/30 bg-ember/10 px-3 py-1 text-xs font-bold text-red-100">שעון ישראל</span>

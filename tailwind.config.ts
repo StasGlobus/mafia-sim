@@ -15,8 +15,9 @@ const config: Config = {
         ink: "#1a120c",
       },
       fontFamily: {
-        heebo: ["var(--font-heebo)", "Arial Hebrew", "Arial", "sans-serif"],
-        display: ["var(--font-display)", "var(--font-heebo)", "serif"],
+        heebo: ["var(--font-heebo)", "system-ui", "Arial Hebrew", "Arial", "sans-serif"],
+        sans: ["var(--font-heebo)", "system-ui", "Arial Hebrew", "Arial", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-heebo)", "system-ui", "sans-serif"],
       },
     },
   },

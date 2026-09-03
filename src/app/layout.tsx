@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Frank_Ruhl_Libre, Heebo } from "next/font/google";
+import { Heebo, Suez_One } from "next/font/google";
 import "./globals.css";
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
-  weight: ["400", "500", "700", "800"],
+  weight: ["400", "500", "600", "700", "800"],
   variable: "--font-heebo",
   display: "swap",
 });
 
-const display = Frank_Ruhl_Libre({
+const display = Suez_One({
   subsets: ["hebrew", "latin"],
-  weight: ["400", "700", "900"],
+  weight: "400",
   variable: "--font-display",
   display: "swap",
 });
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     default: "AiYara — מי בעיירה מסתיר שיניים?",
     template: "%s · AiYara",
   },
-  description: "עיירה, זאבים ובוטים. משחק מאפיה בעברית ל־5–12 שחקנים, במשחק מהיר של דקות או במשחק מתמשך של ימים. שחקני AI ממלאים כל כיסא ריק.",
+  description: "עיירה, זאבים ובוטים. משחק בעברית ל־5–12 שחקנים: חצי שעה על הספה, או כפר שחי ימים. שחקני AI ממלאים כל כיסא ריק.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -49,7 +49,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="he" dir="rtl" className={`${heebo.variable} ${display.variable}`}>
-      <body className="font-heebo antialiased">{children}</body>
+      <body className={`${heebo.className} antialiased`}>{children}</body>
     </html>
   );
 }
