@@ -130,7 +130,7 @@ export default function AdminHomePage() {
           <section className="order-2 max-w-lg lg:order-1">
             <div className="hidden lg:block">
               <p className="text-sm font-bold text-ember">אתם מנהלים</p>
-              <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">פותחים שולחן,<br />והכפר מתעורר.</h1>
+              <h1 className="font-display mt-3 text-[1.9rem] sm:text-5xl">פותחים שולחן,<br />והעיירה מתעוררת.</h1>
               <p className="mt-5 text-base leading-7 text-paper/75 sm:text-lg sm:leading-8">
                 אתם בוחרים כמה שחקנים, כמה זאבים ובאיזה קצב. הבמאי מנהל את הלילות ודואג שכל משחק ייצא אחר.
               </p>

@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     default: "AiYara — אחד מהחברים שלכם הוא זאב",
     template: "%s · AiYara",
   },
-  description: "עיירה, זאבים ובוטים. משחק בעברית ל־5–12 שחקנים: חצי שעה על הספה, או כפר שחי ימים. שחקני AI ממלאים כל כיסא ריק.",
+  description: "עיירה, זאבים ובוטים. משחק בעברית ל־5–12 שחקנים: חצי שעה על הספה, או עיירה שחיה ימים. שחקני AI ממלאים כל כיסא ריק.",
   manifest: "/manifest.json",
   icons: {
     icon: [

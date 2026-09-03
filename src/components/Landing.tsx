@@ -52,7 +52,7 @@ export default function Landing() {
             <Image src="/art/icon.png" alt="" width={48} height={48} className="h-11 w-11 rounded-[14px] object-cover ring-1 ring-white/15 transition-transform group-hover:scale-105" />
             <div>
               <div className="font-display text-lg leading-none">AiYara</div>
-              <div className="mt-1 text-[11px] font-medium tracking-[.14em] text-paper/55">הכפר לא נרדם</div>
+              <div className="mt-1 text-[11px] font-medium tracking-[.14em] text-paper/55">העיירה לא נרדמת</div>
             </div>
           </Link>
           <Link href="/sim" className="hidden items-center gap-2 rounded-full border border-white/15 bg-black/25 px-4 py-2.5 text-sm font-bold text-paper/75 backdrop-blur transition hover:border-white/30 hover:bg-white/10 hover:text-paper sm:flex">
@@ -92,7 +92,7 @@ export default function Landing() {
 
             <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-paper/65">
               <span>בלי להתקין כלום</span><span className="h-1 w-1 rounded-full bg-paper/25" />
-              <span>לכל אחד שם אחר בכפר</span><span className="h-1 w-1 rounded-full bg-paper/25" />
+              <span>לכל אחד שם אחר בעיירה</span><span className="h-1 w-1 rounded-full bg-paper/25" />
               <span>אפשר גם לבד מול הבוטים</span>
             </div>
 
