@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { QUICK_DAY_OPTIONS, QUICK_NIGHT_OPTIONS, ROOM_CODE_LENGTH, WEEKDAY_CHIPS, type BotMode, type DirectorStyle, type GameMode, type Gender, type IdentityMode } from "@/lib/types";
 
 function saveMe(code: string, me: { playerId: string; secret: string; fakeName: string }) {
@@ -38,6 +38,15 @@ export default function AdminHomePage() {
   const [gender, setGender] = useState<Gender>("m");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    setMoreOpen(media.matches);
+    const update = () => setMoreOpen(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   function toggleDay(index: number) {
     setDays((current) => {
@@ -141,7 +150,7 @@ export default function AdminHomePage() {
             </form>
           </section>
 
-          <section className="entry-panel order-1 rounded-[30px] border border-white/10 p-5 backdrop-blur-xl sm:p-8 lg:order-2" aria-labelledby="create-title">
+          <section className="entry-panel order-1 rounded-2xl border border-white/10 p-4 backdrop-blur-xl sm:rounded-[30px] sm:p-8 lg:order-2" aria-labelledby="create-title">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="create-title" className="font-display text-2xl">שולחן חדש</h2>
@@ -150,7 +159,7 @@ export default function AdminHomePage() {
               <span className="rounded-full border border-ember/30 bg-ember/10 px-3 py-1 text-xs font-bold text-red-100">שעון ישראל</span>
             </div>
 
-            <form onSubmit={create} className="mt-7 space-y-6">
+            <form id="create-game-form" onSubmit={create} className="mt-5 space-y-4 sm:mt-7 sm:space-y-6">
               <label className="block" htmlFor="host-name">
                 <span className="text-sm font-bold text-paper/75">שם המנהל</span>
                 <input
@@ -165,7 +174,7 @@ export default function AdminHomePage() {
                 />
                 <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="איך לפנות אליך">
                   {([["m", "פונים אליי בזכר"], ["f", "פונים אליי בנקבה"]] as const).map(([id, label]) => (
-                    <button key={id} type="button" role="radio" aria-checked={gender === id} onClick={() => setGender(id)} className={`min-h-10 rounded-xl border text-xs font-bold transition ${gender === id ? "border-paper/50 bg-paper/10 text-paper" : "border-white/10 bg-white/[.03] text-paper/50"}`}>{label}</button>
+                    <button key={id} type="button" role="radio" aria-checked={gender === id} onClick={() => setGender(id)} className={`min-h-12 rounded-xl border text-xs font-bold transition ${gender === id ? "border-paper/50 bg-paper/10 text-paper" : "border-white/10 bg-white/[.03] text-paper/50"}`}>{label}</button>
                   ))}
                 </div>
               </label>
@@ -184,15 +193,15 @@ export default function AdminHomePage() {
                 <fieldset>
                   <legend className="text-sm font-bold text-paper/75">אורך היום והלילה</legend>
                   <div className="mt-3 grid grid-cols-2 gap-3">
-                    <label className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                    <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
                       <span className="text-paper/50">יום (דקות)</span>
-                      <select value={quickDayMinutes} onChange={(event) => setQuickDayMinutes(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded-xl bg-white/10 px-3 font-black text-paper">
+                      <select value={quickDayMinutes} onChange={(event) => setQuickDayMinutes(Number(event.target.value))} className="mt-2 min-h-12 w-full rounded-xl bg-white/10 px-3 text-base font-black text-paper">
                         {QUICK_DAY_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </label>
-                    <label className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                    <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
                       <span className="text-paper/50">לילה (דקות)</span>
-                      <select value={quickNightMinutes} onChange={(event) => setQuickNightMinutes(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded-xl bg-white/10 px-3 font-black text-paper">
+                      <select value={quickNightMinutes} onChange={(event) => setQuickNightMinutes(Number(event.target.value))} className="mt-2 min-h-12 w-full rounded-xl bg-white/10 px-3 text-base font-black text-paper">
                         {QUICK_NIGHT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </label>
@@ -204,7 +213,7 @@ export default function AdminHomePage() {
               <fieldset>
                 <legend className="text-sm font-bold text-paper/75">הרכב הכפר</legend>
                 <div className="mt-3 grid grid-cols-2 gap-3">
-                  <label className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                  <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
                     <span className="text-paper/50">שחקנים</span>
                     <select
                       value={seats}
@@ -213,23 +222,30 @@ export default function AdminHomePage() {
                         setSeats(next);
                         setWolfCount((current) => Math.min(current, Math.floor((next - 1) / 2)));
                       }}
-                      className="mt-2 min-h-11 w-full rounded-xl bg-white/10 px-3 font-black text-paper"
+                      className="mt-2 min-h-12 w-full rounded-xl bg-white/10 px-3 text-base font-black text-paper"
                     >
                       {Array.from({ length: 8 }, (_, index) => index + 5).map((count) => <option key={count} value={count}>{count}</option>)}
                     </select>
                   </label>
-                  <label className="rounded-2xl border border-white/10 bg-black/20 p-3 text-sm">
+                  <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm">
                     <span className="text-paper/50">זאבים</span>
-                    <select value={wolfCount} onChange={(event) => setWolfCount(Number(event.target.value))} className="mt-2 min-h-11 w-full rounded-xl bg-white/10 px-3 font-black text-paper">
+                    <select value={wolfCount} onChange={(event) => setWolfCount(Number(event.target.value))} className="mt-2 min-h-12 w-full rounded-xl bg-white/10 px-3 text-base font-black text-paper">
                       {Array.from({ length: Math.floor((seats - 1) / 2) }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}</option>)}
                     </select>
                   </label>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <ToggleButton active={hasSeer} onClick={() => setHasSeer((value) => !value)} label="רואה" detail="בודק תפקיד בלילה" />
-                  <ToggleButton active={hasDoctor} onClick={() => setHasDoctor((value) => !value)} label="רופא" detail="מציל קורבן בלילה" />
-                </div>
               </fieldset>
+
+              <details open={moreOpen} onToggle={(event) => setMoreOpen(event.currentTarget.open)} className="group rounded-2xl border border-white/10 bg-black/10 lg:rounded-none lg:border-0 lg:bg-transparent">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-paper/80 marker:hidden lg:px-0 lg:pt-0 [&::-webkit-details-marker]:hidden">
+                  <span>עוד הגדרות <span className="font-normal text-paper/40">· {identityMode === "aliases" ? "שמות בדויים" : "שמות אמיתיים"} · {botMode === "fill" ? "חברים + AI" : "אנשים בלבד"} · {directorStyle === "dynamic" ? "דינמי" : directorStyle === "classic" ? "קלאסי" : "פרוע"}</span></span>
+                  <span aria-hidden="true" className="text-lg text-paper/45 transition group-open:rotate-180">⌄</span>
+                </summary>
+                <div className="space-y-4 border-t border-white/10 px-4 pb-4 pt-4 sm:space-y-6 lg:border-0 lg:px-0 lg:pb-0">
+                  <div className="grid grid-cols-2 gap-2">
+                    <ToggleButton active={hasSeer} onClick={() => setHasSeer((value) => !value)} label="רואה" detail="בודק תפקיד בלילה" />
+                    <ToggleButton active={hasDoctor} onClick={() => setHasDoctor((value) => !value)} label="רופא" detail="מציל קורבן בלילה" />
+                  </div>
 
               <ChoiceGroup
                 title="זהויות"
@@ -273,8 +289,8 @@ export default function AdminHomePage() {
                   })}
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <label className="text-sm"><span className="text-paper/50">פתיחה</span><input type="time" value={dayStart} onChange={(event) => setDayStart(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-paper focus:border-ember/70 focus:outline-none" required /></label>
-                  <label className="text-sm"><span className="text-paper/50">סגירה</span><input type="time" value={dayEnd} onChange={(event) => setDayEnd(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-paper focus:border-ember/70 focus:outline-none" required /></label>
+                  <label className="text-sm"><span className="text-paper/50">פתיחה</span><input type="time" dir="ltr" value={dayStart} onChange={(event) => setDayStart(event.target.value)} className="mt-2 min-h-12 w-full min-w-0 rounded-xl border border-white/10 bg-black/25 px-3 text-base text-paper focus:border-ember/70 focus:outline-none" required /></label>
+                  <label className="text-sm"><span className="text-paper/50">סגירה</span><input type="time" dir="ltr" value={dayEnd} onChange={(event) => setDayEnd(event.target.value)} className="mt-2 min-h-12 w-full min-w-0 rounded-xl border border-white/10 bg-black/25 px-3 text-base text-paper focus:border-ember/70 focus:outline-none" required /></label>
                 </div>
               </fieldset>
 
@@ -290,7 +306,7 @@ export default function AdminHomePage() {
                         onClick={() => toggleDay(day.i)}
                         aria-pressed={active}
                         aria-label={`יום ${day.l}`}
-                        className={`flex aspect-square items-center justify-center rounded-xl text-sm font-black transition sm:text-base ${active ? "bg-paper text-ink" : "border border-white/10 bg-white/5 text-paper/35 hover:text-paper"}`}
+                        className={`flex min-h-10 items-center justify-center rounded-xl text-sm font-black transition sm:aspect-square sm:min-h-0 sm:text-base ${active ? "bg-paper text-ink" : "border border-white/10 bg-white/5 text-paper/35 hover:text-paper"}`}
                       >
                         {day.l}
                       </button>
@@ -299,10 +315,12 @@ export default function AdminHomePage() {
                 </div>
               </fieldset>
               </>)}
+                </div>
+              </details>
 
               {err && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">{err}</p>}
 
-              <button type="submit" disabled={busy || !realName.trim()} className="min-h-16 w-full rounded-2xl bg-ember px-5 text-lg font-black text-white shadow-[0_14px_35px_rgba(133,27,24,.3)] transition hover:bg-[#e65346] disabled:cursor-not-allowed disabled:opacity-35">
+              <button type="submit" disabled={busy || !realName.trim()} className="sticky bottom-0 z-10 min-h-14 w-full rounded-2xl border-t border-white/10 bg-ember/95 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 text-lg font-black text-white shadow-[0_14px_35px_rgba(133,27,24,.3)] backdrop-blur-xl transition lg:static lg:border-0 lg:bg-ember lg:p-0 hover:bg-[#e65346] disabled:cursor-not-allowed disabled:opacity-35">
                 {busy ? "פותחים את הכפר…" : "פתיחת משחק"}
               </button>
             </form>
@@ -315,7 +333,7 @@ export default function AdminHomePage() {
 
 function ToggleButton({ active, onClick, label, detail }: { active: boolean; onClick: () => void; label: string; detail: string }) {
   return (
-    <button type="button" onClick={onClick} aria-pressed={active} className={`rounded-2xl border p-3 text-right transition ${active ? "border-ember/60 bg-ember/15" : "border-white/10 bg-white/[.03] opacity-55"}`}>
+    <button type="button" onClick={onClick} aria-pressed={active} className={`rounded-2xl border min-h-12 p-3 text-right transition ${active ? "border-ember/60 bg-ember/15" : "border-white/10 bg-white/[.03] opacity-55"}`}>
       <span className="block font-black">{active ? "✓ " : ""}{label}</span>
       <span className="mt-1 block text-xs text-paper/45">{detail}</span>
     </button>
@@ -326,9 +344,9 @@ function ChoiceGroup({ title, value, onChange, options }: { title: string; value
   return (
     <fieldset>
       <legend className="text-sm font-bold text-paper/75">{title}</legend>
-      <div className={`mt-3 grid gap-2 ${options.length === 3 ? "sm:grid-cols-3" : "grid-cols-2"}`}>
+      <div className={`mt-3 grid gap-2 ${options.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         {options.map(([id, label, detail]) => (
-          <button key={id} type="button" onClick={() => onChange(id)} aria-pressed={value === id} className={`rounded-2xl border p-3 text-right transition ${value === id ? "border-paper/50 bg-paper/10" : "border-white/10 bg-white/[.03] text-paper/55"}`}>
+          <button key={id} type="button" onClick={() => onChange(id)} aria-pressed={value === id} className={`rounded-2xl border min-h-12 p-3 text-right transition ${value === id ? "border-paper/50 bg-paper/10" : "border-white/10 bg-white/[.03] text-paper/55"}`}>
             <span className="block text-sm font-black">{label}</span>
             <span className="mt-1 block text-[11px] leading-4 text-paper/40">{detail}</span>
           </button>
