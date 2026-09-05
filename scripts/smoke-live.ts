@@ -110,6 +110,10 @@ async function main() {
   assert(game.status === "ended", `the game ended within ${Math.round((t - start) / 60_000)} simulated minutes (${game.winnerText})`);
   const reveal = game.messages.find((m) => m.tone === "reveal");
   assert(Boolean(reveal), "roles were revealed at the end");
+  const summaries = game.daySummaries ?? [];
+  assert(summaries.length >= 1 && summaries.every((d) => d.text.length > 10), `day summaries were written (${summaries.length})`);
+  console.log("--- day summaries ---");
+  for (const d of summaries) console.log(`יום ${d.day}: ${d.text}`);
 
   console.log("\n--- transcript sample (first 30 public lines) ---");
   for (const m of pub.slice(0, 30)) {

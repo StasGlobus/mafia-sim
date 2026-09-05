@@ -294,6 +294,8 @@ export interface LiveGame extends GameState {
   directorEvents: DirectorEvent[];
   remindersSent?: string[];
   lastHumanActionAt?: number;
+  /** One factual line per finished day, so agents remember what happened. */
+  daySummaries?: { day: number; text: string }[];
   /** Notifications waiting for the background pass to deliver. */
   pushOutbox?: PushEvent[];
   /** Last delivery per "playerId:kind", for cooldowns. */

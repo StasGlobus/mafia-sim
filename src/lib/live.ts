@@ -314,6 +314,76 @@ function liveKill(game: LiveGame, id: string, how: string, at: number) {
   game.eventLog.push(`יום ${game.dayNumber}: ${p.name} מת (${roleHe})`);
 }
 
+/** Append a fact to the summary of a given day. */
+function noteDay(game: LiveGame, day: number, text: string) {
+  game.daySummaries ??= [];
+  const entry = game.daySummaries.find((d) => d.day === day);
+  if (entry) entry.text = `${entry.text} ${text}`.trim();
+  else game.daySummaries.push({ day, text });
+  if (game.daySummaries.length > 8) game.daySummaries = game.daySummaries.slice(-8);
+}
+
+function nameOf(game: LiveGame, id: string | null | undefined): string {
+  return game.players.find((p) => p.id === id)?.name ?? "?";
+}
+
+/** Who pushed hardest against a player today, by public mentions. */
+function loudestAgainst(game: LiveGame, targetId: string): string[] {
+  const target = game.players.find((p) => p.id === targetId);
+  if (!target) return [];
+  const counts: Record<string, number> = {};
+  for (const m of game.messages) {
+    if (m.channel !== "public" || m.narrator || m.ts < game.windowStartAt || !m.authorId || m.authorId === targetId) continue;
+    if (m.text.includes(target.name)) counts[m.authorId] = (counts[m.authorId] ?? 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([id]) => nameOf(game, id));
+}
+
+function summarizeDayEnd(game: LiveGame, lynchedId: string | null) {
+  const grouped: Record<string, string[]> = {};
+  for (const [voter, target] of Object.entries(game.votes)) {
+    const v = game.players.find((p) => p.id === voter);
+    if (!v?.alive) continue;
+    (grouped[target] ??= []).push(v.name);
+  }
+  const tally = Object.entries(grouped)
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([target, voters]) => `${nameOf(game, target)} ← ${voters.join(", ")}`)
+    .join("; ");
+  const parts: string[] = [];
+  if (lynchedId) {
+    const victim = game.players.find((p) => p.id === lynchedId);
+    const f = victim?.gender === "f";
+    parts.push(`${nameOf(game, lynchedId)} ${f ? "נתלתה והתגלתה" : "נתלה והתגלה"} כ${ROLE_HE[victim?.role ?? "villager"]}.`);
+    const loud = loudestAgainst(game, lynchedId);
+    if (loud.length) parts.push(`${loud.join(" ו")} ${loud.length > 1 ? "דחפו" : "דחף/ה"} הכי חזק נגד${f ? "ה" : "ו"}.`);
+  } else {
+    parts.push("ההצבעה נסגרה בלי רוב, אף אחד לא נתלה.");
+  }
+  if (tally) parts.push(`הצבעות: ${tally}.`);
+  for (const [id, role] of Object.entries(game.claims ?? {})) {
+    const p = game.players.find((x) => x.id === id);
+    if (p) parts.push(`${p.name} ${p.gender === "f" ? "טוענת שהיא" : "טוען שהוא"} ${ROLE_HE[role]}.`);
+  }
+  noteDay(game, game.dayNumber, parts.join(" "));
+}
+
+function summarizeNight(game: LiveGame) {
+  const kill = game.lastKill;
+  let text: string;
+  if (kill?.saved) text = `בלילה ניסו להרוג את ${kill.name} ומישהו שמר עליו.`;
+  else if (kill?.name) {
+    const victim = game.players.find((p) => p.id === kill.playerId);
+    text = `בלילה ${victim?.gender === "f" ? "נמצאה מתה" : "נמצא מת"} ${kill.name} (${ROLE_HE[kill.role ?? "villager"]}).`;
+  } else text = "הלילה עבר בלי גופה.";
+  const director = game.directorEvents.find((e) => e.dayNumber === game.dayNumber + 1);
+  if (director) text += ` הבמאי: ${director.text}`;
+  noteDay(game, game.dayNumber, text);
+}
+
 function humanIds(game: LiveGame, onlyAlive = false): string[] {
   return game.players.filter((p) => p.kind === "human" && (!onlyAlive || p.alive)).map((p) => p.id);
 }
@@ -537,6 +607,7 @@ function resolveLiveDay(game: LiveGame, at: number) {
   } else {
     game.lastLynch = null;
   }
+  summarizeDayEnd(game, target);
   for (const p of game.players) {
     p.muted = false;
     p.cannotVote = false;
@@ -612,6 +683,7 @@ async function finishNight(game: LiveGame, at: number) {
 
   if (finishIfWon(game, at)) return;
   await applyDirectorEvent(game, at);
+  summarizeNight(game);
   if (finishIfWon(game, at)) return;
   enterDay(game, at, game.dayNumber + 1);
 }

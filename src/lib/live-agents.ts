@@ -698,6 +698,10 @@ function hintFor(game: LiveGame, kind: SpeakKind, o: SayOptions, at: number): st
 
 function factsFor(game: LiveGame, me: Player, at: number): string[] {
   const facts: string[] = [];
+  const previous = (game.daySummaries ?? []).filter((d) => d.day < game.dayNumber).slice(-3);
+  if (previous.length) {
+    facts.push(`מה קרה בימים הקודמים (אפשר ורצוי להתייחס לזה):\n${previous.map((d) => `- יום ${d.day}: ${d.text}`).join("\n")}`);
+  }
   if (game.phase === "day") {
     facts.push(`נשארו ${minutesLeft(game, at)} דקות עד שההצבעה ננעלת.`);
     const lead = leadingTarget(game);
