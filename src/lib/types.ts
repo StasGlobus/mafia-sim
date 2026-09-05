@@ -60,8 +60,8 @@ export const DEFAULT_LIVE_RULES: LiveRules = {
   quickNightMinutes: 3,
 };
 
-export const QUICK_DAY_OPTIONS = [5, 8, 12, 20] as const;
-export const QUICK_NIGHT_OPTIONS = [2, 3, 5] as const;
+export const QUICK_DAY_OPTIONS = [2, 3, 5, 8, 12, 20] as const;
+export const QUICK_NIGHT_OPTIONS = [1, 2, 3, 5] as const;
 
 export type DirectorEventType = "omen" | "silence" | "lost_vote" | "leak" | "blood_moon";
 

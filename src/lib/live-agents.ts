@@ -53,9 +53,18 @@ export interface TickBudget {
   maxLlm: number;
   events: number;
   maxEvents: number;
+  /**
+   * What to do with a fresh speech event when the model budget is spent.
+   * "defer" (background pass): stop and let the next pass, seconds later, say
+   * it with the model. "skip" (a player's own action): leave it pending and
+   * carry on with votes and window changes so the action is judged against
+   * the real phase. Canned lines are only for stale backfill or a model that
+   * is unreachable or failing.
+   */
+  whenOutOfLlm: "defer" | "skip";
 }
 
-export function makeBudget(opts?: { maxLlm?: number; maxEvents?: number; deadlineMs?: number }): TickBudget {
+export function makeBudget(opts?: { maxLlm?: number; maxEvents?: number; deadlineMs?: number; whenOutOfLlm?: "defer" | "skip" }): TickBudget {
   const startedAt = Date.now();
   return {
     startedAt,
@@ -64,14 +73,23 @@ export function makeBudget(opts?: { maxLlm?: number; maxEvents?: number; deadlin
     maxLlm: opts?.maxLlm ?? 3,
     events: 0,
     maxEvents: opts?.maxEvents ?? 40,
+    whenOutOfLlm: opts?.whenOutOfLlm ?? "defer",
   };
+}
+
+/** Old enough that a canned line is acceptable: the reader missed it anyway. */
+function isStale(at: number): boolean {
+  return Date.now() - at > LLM_FRESH_MS;
+}
+
+function llmBudgetLeft(budget: TickBudget): boolean {
+  return budget.llmCalls < budget.maxLlm && Date.now() <= budget.deadlineAt - 3_500;
 }
 
 function mayUseLlm(budget: TickBudget, at: number): boolean {
   if (!llmAvailable()) return false;
-  if (budget.llmCalls >= budget.maxLlm) return false;
-  if (Date.now() > budget.deadlineAt - 3_500) return false;
-  if (Date.now() - at > LLM_FRESH_MS) return false;
+  if (!llmBudgetLeft(budget)) return false;
+  if (isStale(at)) return false;
   return true;
 }
 
@@ -905,7 +923,11 @@ function reminderEvents(game: LiveGame): DueEvent[] {
   return out;
 }
 
-function nextEvent(game: LiveGame, until: number): DueEvent | null {
+function eventKey(e: DueEvent): string {
+  return `${e.kind}:${e.agent?.id ?? e.key ?? ""}`;
+}
+
+function nextEvent(game: LiveGame, until: number, skipped?: Set<string>): DueEvent | null {
   const events: DueEvent[] = [];
   const phase = game.phase;
   for (const a of agentsAlive(game)) {
@@ -919,11 +941,14 @@ function nextEvent(game: LiveGame, until: number): DueEvent | null {
     if (m.actAt && (phase === "night_seer" || phase === "night_doctor")) events.push({ at: m.actAt, kind: "act", agent: a });
   }
   events.push(...reminderEvents(game));
-  const due = events.filter((e) => e.at <= until);
+  const due = events.filter((e) => e.at <= until && !(skipped && skipped.has(eventKey(e))));
   if (!due.length) return null;
+  // Answers to people come first: a reply that lands late reads as ignoring them.
+  const reactions = due.filter((e) => e.kind === "reaction");
+  const pool = reactions.length && !isStale(reactions[0]!.at) ? reactions : due;
   const rank: Record<EventKind, number> = { reaction: 0, reminder: 1, act: 2, vote: 3, closing: 4, speak: 5 };
-  due.sort((x, y) => x.at - y.at || rank[x.kind] - rank[y.kind]);
-  return due[0]!;
+  pool.sort((x, y) => x.at - y.at || rank[x.kind] - rank[y.kind]);
+  return pool[0]!;
 }
 
 async function runSpeak(game: LiveGame, me: Player, at: number, budget: TickBudget) {
@@ -1132,12 +1157,22 @@ function runReminder(game: LiveGame, key: string, at: number) {
 export async function runAgentEvents(game: LiveGame, until: number, budget: TickBudget): Promise<boolean> {
   if (game.status !== "running") return true;
   ensureAgentState(game);
+  const skipped = new Set<string>();
   for (let guard = 0; guard < 400; guard++) {
-    const next = nextEvent(game, until);
-    if (!next) return true;
+    const next = nextEvent(game, until, skipped);
+    if (!next) return skipped.size === 0;
     if (budget.events >= budget.maxEvents || Date.now() > budget.deadlineAt) return false;
-    budget.events += 1;
     const at = Math.max(next.at, game.windowStartAt);
+    const speech = next.kind === "speak" || next.kind === "reaction";
+    if (speech && llmAvailable() && !isStale(at) && !llmBudgetLeft(budget)) {
+      // Do not degrade to a canned line: wait for the model.
+      if (budget.whenOutOfLlm === "skip") {
+        skipped.add(eventKey(next));
+        continue;
+      }
+      return false;
+    }
+    budget.events += 1;
     switch (next.kind) {
       case "reaction":
         await runReaction(game, next.agent!, at, budget);

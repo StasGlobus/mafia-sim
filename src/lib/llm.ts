@@ -193,7 +193,7 @@ export async function generateAgentLine(opts: LineRequest): Promise<string | nul
     .join("\n");
 
   try {
-    const ctrl = AbortSignal.timeout(opts.timeoutMs ?? (replyTo ? 5000 : 6500));
+    const ctrl = AbortSignal.timeout(opts.timeoutMs ?? (replyTo ? 10_000 : 12_000));
     const { text } = await generateText({
       model: gameModel(),
       system: sys,

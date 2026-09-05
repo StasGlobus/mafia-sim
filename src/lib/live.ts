@@ -52,7 +52,7 @@ export { prettyJerusalem };
 const TZ = "Asia/Jerusalem";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const MAX_WINDOW_STEPS = 8;
-const LEASE_MS = 15_000;
+const LEASE_MS = 50_000;
 const MIN = 60_000;
 const HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -805,7 +805,7 @@ async function loadForRead(code: string, secret: string): Promise<{ game: LiveGa
  * sure only one pass runs per game at a time; the version check protects the
  * data if two still overlap.
  */
-export async function advanceLiveGame(code: string, budget: TickBudget = makeBudget({ maxLlm: 4, deadlineMs: 12_000 })): Promise<void> {
+export async function advanceLiveGame(code: string, budget: TickBudget = makeBudget({ maxLlm: 10, deadlineMs: 45_000, maxEvents: 60 })): Promise<void> {
   const clean = cleanCode(code);
   if (!clean) return;
   const now = Date.now();
@@ -838,7 +838,7 @@ export async function advanceLiveGame(code: string, budget: TickBudget = makeBud
  */
 async function advanceForWrite(game: LiveGame, now: number): Promise<ActionResult | null> {
   if (game.status !== "running") return null;
-  await catchUp(game, now, makeBudget({ maxLlm: 0, maxEvents: 60, deadlineMs: 6_000 }));
+  await catchUp(game, now, makeBudget({ maxLlm: 0, maxEvents: 60, deadlineMs: 6_000, whenOutOfLlm: "skip" }));
   if (game.status === "running" && now >= game.nextLockAt) {
     return { ok: false, error: "העיירה מתעדכנת, שנייה ונסו שוב", status: 409 };
   }
@@ -994,7 +994,7 @@ export async function startLiveGame(input: { code: string; secret: string }): Pr
       announce(game, `העיירה סגורה עכשיו. היום הראשון נפתח ב${prettyJerusalem(win.nextLockAt)}.`, now);
     }
 
-    await catchUp(game, now, makeBudget({ maxLlm: 0 }));
+    await catchUp(game, now, makeBudget({ maxLlm: 0, whenOutOfLlm: "skip" }));
     return viewOf(game, me, now);
   });
 }

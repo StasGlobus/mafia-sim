@@ -19,7 +19,7 @@ import type { LiveRules } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 20;
+export const maxDuration = 60;
 
 type AuthMap = Record<string, { playerId: string; secret: string }>;
 
