@@ -137,7 +137,11 @@ function clean(raw: string): string | null {
   if (!t || t.length < 1) return null;
   // Chat messages rarely end with a period.
   if (/[^.!?]\.$/.test(t) && !t.slice(0, -1).includes(". ")) t = t.slice(0, -1);
-  if (t.length > 160) t = t.slice(0, 157) + "…";
+  if (t.length > 220) {
+    // Cut at a word boundary; a chat message does not trail off with an ellipsis.
+    const cut = t.slice(0, 220);
+    t = cut.slice(0, Math.max(cut.lastIndexOf(" "), 120)).replace(/[,،:\-–]$/, "");
+  }
   const low = t.toLowerCase();
   if (/(אני (בוט|ai|סוכן|מודל)|language model|as an ai)/i.test(low)) return null;
   // A Latin word means the model slipped into English; the canned line is better.

@@ -341,6 +341,11 @@ function setVote(game: LiveGame, me: Player, targetId: string, at: number) {
 // Scheduling
 // ---------------------------------------------------------------------------
 
+/** How long before the lock agents stop starting new lines: two minutes, or 15% of a short day. */
+function lockMargin(game: LiveGame) {
+  return Math.min(2 * MIN, dayLength(game) * 0.15);
+}
+
 /** Scales the gaps between messages. Quick games compress to the 45 second floor. */
 function dayFactor(game: LiveGame) {
   return clamp(dayLength(game) / (12 * HOUR), 0.011, 1.25);
@@ -370,7 +375,7 @@ function sampleGap(game: LiveGame, me: Player, at: number) {
   const left = (m.budgetToday ?? talk.budget) - m.messagesToday;
   const remaining = Math.max(0, game.nextLockAt - at);
   if (left > 0) gap = Math.max(gap, (remaining / (left + 1)) * 0.5);
-  return clamp(gap, 45 * SEC, 3 * HOUR);
+  return clamp(gap, Math.min(45 * SEC, dayLength(game) / 12), 3 * HOUR);
 }
 
 /** Called when a day opens. Spreads every agent's talking and voting over the day. */
@@ -390,7 +395,7 @@ export function scheduleDay(game: LiveGame, at: number) {
     m.budgetToday = Math.max(2, Math.round(talk.budget * budgetFactor(game) * jitter(0.75, 1.25)));
     const early = rnd() < (newsy ? 0.75 : 0.45) * clamp(talk.momentum + 0.5, 0.4, 1);
     const first = early ? jitter(1.5 * MIN, 40 * MIN) * factor : sampleGap(game, a, at);
-    m.nextSpeakAt = Math.min(at + first, game.nextLockAt - 2 * MIN);
+    m.nextSpeakAt = Math.min(at + first, game.nextLockAt - lockMargin(game));
     const voteWindow: [number, number] =
       a.personality === "cold" ? [0.12, 0.4] : a.personality === "naive" ? [0.5, 0.85] : [0.2, 0.7];
     m.voteAt = at + len * jitter(voteWindow[0], voteWindow[1]);
@@ -1004,7 +1009,7 @@ async function runSpeak(game: LiveGame, me: Player, at: number, budget: TickBudg
     await say(game, me, plan.kind, at, budget, { t: plan.t, a: plan.a, reason: plan.reason });
   }
   const next = at + sampleGap(game, me, at);
-  m.nextSpeakAt = next < game.nextLockAt - MIN ? next : null;
+  m.nextSpeakAt = next < game.nextLockAt - lockMargin(game) / 2 ? next : null;
 }
 
 async function runReaction(game: LiveGame, me: Player, at: number, budget: TickBudget) {
